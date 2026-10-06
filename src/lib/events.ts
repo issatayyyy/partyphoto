@@ -19,7 +19,8 @@ const fields = {
   startsAt: date,
   expiresAt: date,
   allowGuestUploads: z.boolean(),
-  moderateUploads: z.boolean(),
+  // Accept older clients' field without restoring an approval requirement.
+  moderateUploads: z.boolean().transform(() => false),
   allowDownloads: z.boolean(),
   maxPhotos: z.number().int().min(1).max(10000),
   maxStorageMb: z.number().int().min(10).max(102400),
@@ -33,7 +34,7 @@ const createSchema = z.object({
   startsAt: fields.startsAt.default(null),
   expiresAt: fields.expiresAt.default(null),
   allowGuestUploads: fields.allowGuestUploads.default(false),
-  moderateUploads: fields.moderateUploads.default(true),
+  moderateUploads: fields.moderateUploads.default(false),
   allowDownloads: fields.allowDownloads.default(true),
   maxPhotos: fields.maxPhotos.default(1000),
   maxStorageMb: fields.maxStorageMb.default(10240),
@@ -57,7 +58,7 @@ function dto(event: EventRecord, user: CurrentUser): EventDTO {
     id: event.id, title: event.title, slug: event.slug, code: event.code, description: event.description,
     startsAt: event.startsAt?.toISOString() ?? null, expiresAt: event.expiresAt?.toISOString() ?? null,
     createdAt: event.createdAt.toISOString(), allowGuestUploads: event.allowGuestUploads,
-    moderateUploads: event.moderateUploads, allowDownloads: event.allowDownloads,
+    moderateUploads: false, allowDownloads: event.allowDownloads,
     maxPhotos: event.maxPhotos, maxStorageMb: Number(event.maxStorageBytes / BigInt(mb)), maxUploadMb: event.maxUploadBytes / mb,
     usedStorageBytes: event.usedStorageBytes.toString(), viewCount: event.viewCount.toString(), downloadCount: event.downloadCount.toString(),
     photoCount: event._count.photos, hasPassword: event.passwordHash !== null, canManage: canManageEvent(event, user),
@@ -153,7 +154,7 @@ export async function updateEvent(id: string, input: unknown, user: CurrentUser)
       || (data.allowDownloads !== undefined && data.allowDownloads !== event.allowDownloads);
     const updated = await tx.event.update({ where: { id }, data: {
       title: data.title, description: data.description, slug: data.slug || undefined, startsAt, expiresAt,
-      passwordHash, allowGuestUploads: data.allowGuestUploads, moderateUploads: data.moderateUploads,
+      passwordHash, allowGuestUploads: data.allowGuestUploads, moderateUploads: false,
       allowDownloads: data.allowDownloads, maxPhotos: data.maxPhotos,
       maxStorageBytes: data.maxStorageMb === undefined ? undefined : BigInt(data.maxStorageMb) * BigInt(mb),
       maxUploadBytes: data.maxUploadMb === undefined ? undefined : data.maxUploadMb * mb,

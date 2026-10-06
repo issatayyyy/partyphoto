@@ -4,12 +4,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import type { PhotoDTO } from "@/lib/photo-types";
 
-type UploadItem = { file: File; status: "ready" | "uploading" | "uploaded" | "pending" | "error"; message?: string; retryable?: boolean };
+type UploadItem = { file: File; status: "ready" | "uploading" | "uploaded" | "error"; message?: string; retryable?: boolean };
 type PhotoUploadProps = { endpoint: string; maxUploadMb: number; guest?: boolean; onUploaded: () => void };
 
 export function PhotoUpload({ endpoint, maxUploadMb, guest = false, onUploaded }: PhotoUploadProps) {
   const router = useRouter();
   const inputId = useId();
+  const fileInput = useRef<HTMLInputElement>(null);
   const uploading = useRef(false);
   const controller = useRef<AbortController | null>(null);
   const [items, setItems] = useState<UploadItem[]>([]);
@@ -63,8 +64,7 @@ export function PhotoUpload({ endpoint, maxUploadMb, guest = false, onUploaded }
         const response = await fetch(endpoint, { method: "POST", credentials: "same-origin", body, signal });
         const result = await response.json() as { photo?: PhotoDTO; error?: string };
         if (!response.ok || !result.photo) throw new Error(result.error || "Не удалось загрузить фотографию.");
-        const status = result.photo.status === "PENDING" ? "pending" : "uploaded";
-        setItems((current) => current.map((entry, index) => index === item.index ? { ...entry, status, retryable: false } : entry));
+        setItems((current) => current.map((entry, index) => index === item.index ? { ...entry, status: "uploaded", retryable: false } : entry));
         uploaded++;
       } catch (uploadError) {
         if (signal.aborted) break;
@@ -80,16 +80,19 @@ export function PhotoUpload({ endpoint, maxUploadMb, guest = false, onUploaded }
     }
   }
 
-  const statusLabels = { ready: "Готово к загрузке", uploading: "Загружается…", uploaded: "Загружено", pending: "Отправлено на проверку", error: "Не загружено" };
+  const statusLabels = { ready: "Готово к загрузке", uploading: "Загружается…", uploaded: "Добавлено в альбом", error: "Не загружено" };
 
   return (
+    <>
+    {guest && <div className="guest-photo-cta"><div><strong>Ваши фотки — в общем альбоме</strong><p>Добавьте снимки с мероприятия. Они появятся в альбоме сразу.</p></div><button className="button button-primary" type="button" onClick={() => fileInput.current?.click()} disabled={pending}>Добавить фотки <span aria-hidden="true">↑</span></button></div>}
     <form noValidate className="photo-upload" onSubmit={upload} aria-busy={pending}>
       <div className="photo-upload-heading"><div><h3>{guest ? "Поделитесь своими снимками" : "Добавьте фотографии"}</h3><p>JPEG, PNG или WebP. До {maxUploadMb} МБ на фотографию, до 20 файлов за раз.</p></div><span aria-hidden="true">↑</span></div>
-      <div className="form-field"><label htmlFor={inputId}>Выберите фотографии</label><input id={inputId} name="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={pending} onChange={(event) => selectFiles(event.target.files)} aria-describedby={`${inputId}-help${error ? ` ${inputId}-error` : ""}`} aria-invalid={Boolean(error)} /><p className="field-help" id={`${inputId}-help`}>Фотографии загружаются по очереди. Не закрывайте страницу до завершения.</p></div>
+      <div className="form-field"><label htmlFor={inputId}>Выберите фотографии</label><input ref={fileInput} id={inputId} name="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={pending} onChange={(event) => selectFiles(event.target.files)} aria-describedby={`${inputId}-help${error ? ` ${inputId}-error` : ""}`} aria-invalid={Boolean(error)} /><p className="field-help" id={`${inputId}-help`}>Фотографии загружаются по очереди. Не закрывайте страницу до завершения.</p></div>
       {items.length > 0 && <ul className="upload-file-list">{items.map((item, index) => <li key={`${item.file.name}-${index}`} className={`upload-file upload-file-${item.status}`}><div><strong>{item.file.name}</strong><small>{(item.file.size / (1024 * 1024)).toLocaleString("ru-RU", { maximumFractionDigits: 1 })} МБ</small></div><span>{item.message || statusLabels[item.status]}</span></li>)}</ul>}
-      {batch.total > 0 && <div className="upload-progress"><progress value={batch.completed} max={batch.total} aria-label="Прогресс загрузки" /><p role="status" aria-live="polite">{pending ? `Загрузка: ${batch.completed} из ${batch.total}.` : `Обработано ${batch.completed} из ${batch.total} фотографий.`}{!pending && items.some((item) => item.status === "pending") ? " Фотографии на проверке появятся в альбоме после одобрения организатором." : ""}</p></div>}
+      {batch.total > 0 && <div className="upload-progress"><progress value={batch.completed} max={batch.total} aria-label="Прогресс загрузки" /><p role="status" aria-live="polite">{pending ? `Загрузка: ${batch.completed} из ${batch.total}.` : `Обработано ${batch.completed} из ${batch.total} фотографий.`}{!pending && items.some((item) => item.status === "uploaded") ? " Загруженные фотографии уже видны в альбоме." : ""}</p></div>}
       <button className="button button-primary" type="submit" disabled={pending || (items.length > 0 && uploadable.length === 0)}>{pending ? "Загружаем фотографии…" : (items.some((item) => item.status === "error" && item.retryable) ? "Повторить загрузку" : "Загрузить фотографии")}<span aria-hidden="true">↑</span></button>
       {error && <p className="form-error" id={`${inputId}-error`} role="alert">{error}</p>}
     </form>
+    </>
   );
 }

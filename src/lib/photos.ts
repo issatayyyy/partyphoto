@@ -189,9 +189,9 @@ export async function uploadPhoto(request: Request, access: PhotoAccess) {
       await authorize(tx, event, access.actor, true);
       const photo = await tx.photo.findUnique({ where: { id } });
       if (!photo || photo.status !== "PROCESSING" || !photo.uploadExpiresAt || photo.uploadExpiresAt <= new Date()) throw new AuthError(409, "Время загрузки истекло. Повторите попытку.");
-      const status = access.actor.kind === "guest" && event.moderateUploads ? "PENDING" : "PUBLISHED";
+      const status = "PUBLISHED";
       const finalized = await tx.photo.update({ where: { id }, data: { status, reservedBytes: 0n, uploadExpiresAt: null } });
-      await tx.event.update({ where: { id: event.id }, data: { reservedBytes: { decrement: totalBytes }, usedStorageBytes: { increment: totalBytes }, ...(status === "PUBLISHED" ? { mediaVersion: { increment: 1 } } : {}) } });
+      await tx.event.update({ where: { id: event.id }, data: { reservedBytes: { decrement: totalBytes }, usedStorageBytes: { increment: totalBytes }, mediaVersion: { increment: 1 } } });
       return photoDTO(finalized, { ...access, event });
     });
   } catch (error) {

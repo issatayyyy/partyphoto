@@ -64,7 +64,8 @@ model Event {
   accessVersion       Int           @default(1)
   mediaVersion        Int           @default(1)
   allowGuestUploads   Boolean       @default(false)
-  moderateUploads     Boolean       @default(true)
+  // Compatibility field; accepted guest uploads are always published.
+  moderateUploads     Boolean       @default(false)
   allowDownloads      Boolean       @default(true)
   maxPhotos           Int           @default(1000)
   maxStorageBytes     BigInt        @default(10737418240)

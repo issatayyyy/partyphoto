@@ -6,7 +6,7 @@ import { S3Client, DeleteObjectsCommand } from "@aws-sdk/client-s3";
 import argon2 from "argon2";
 import sharp from "sharp";
 
-test("mobile photo batches, guest moderation, original downloads and removal work in the browser", async ({ page, context, browser, baseURL }) => {
+test("mobile photo batches, immediate guest publication, likes, original downloads and removal work in the browser", async ({ page, context, browser, baseURL }) => {
   test.setTimeout(90000);
   const db = new PrismaClient();
   const namespace = `media-browser-${randomUUID()}`;
@@ -16,6 +16,7 @@ test("mobile photo batches, guest moderation, original downloads and removal wor
   const guestName = "guest-memory.png";
   let userId: string | undefined;
   let eventId: string | undefined;
+  let guestVisitorHash: string | undefined;
   let guestContext: Awaited<ReturnType<typeof browser.newContext>> | undefined;
   try {
     const passwordHash = await argon2.hash("12345678", { type: argon2.argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1 });
@@ -58,21 +59,28 @@ test("mobile photo batches, guest moderation, original downloads and removal wor
     await guestPage.goto(new URL(`/e/${event.slug}`, baseURL).href);
     await expect(guestPage.getByRole("img", { name: jpegName, exact: true })).toBeVisible();
     await expect(guestPage.getByRole("img", { name: pngName, exact: true })).toBeVisible();
-    await guestPage.getByLabel("Выберите фотографии", { exact: true }).setInputFiles({ name: guestName, mimeType: "image/png", buffer: png });
+    const chooserPromise = guestPage.waitForEvent("filechooser");
+    await guestPage.getByRole("button", { name: "Добавить фотки", exact: true }).click();
+    await (await chooserPromise).setFiles({ name: guestName, mimeType: "image/png", buffer: png });
     await guestPage.getByRole("button", { name: "Загрузить фотографии", exact: true }).click();
-    await expect(guestPage.getByText("Отправлено на проверку", { exact: true })).toBeVisible();
-    await expect(guestPage.getByRole("img", { name: guestName, exact: true })).toHaveCount(0);
+    await expect(guestPage.getByText("Добавлено в альбом", { exact: true })).toBeVisible();
+    await expect(guestPage.getByRole("img", { name: guestName, exact: true })).toBeVisible();
     const guestPhoto = await db.photo.findFirstOrThrow({ where: { eventId: event.id, filename: guestName } });
-    expect(guestPhoto.status).toBe("PENDING");
+    expect(guestPhoto.status).toBe("PUBLISHED");
+    await expect(guestPage.getByRole("link", { name: `Скачать оригинал ${guestName}`, exact: true })).toBeVisible();
+    await expect(guestPage.getByRole("button", { name: "Скачать всё ZIP", exact: true })).toBeVisible();
+    await guestPage.getByRole("button", { name: `Поставить лайк ${guestName}`, exact: true }).click();
+    await expect(guestPage.getByRole("button", { name: `Убрать лайк ${guestName}`, exact: true })).toHaveAttribute("aria-pressed", "true");
+    expect(await db.photoLike.count({ where: { photoId: guestPhoto.id } })).toBe(1);
+    const visitorCookie = (await guestContext.cookies()).find(cookie => cookie.name === "partyphoto_visitor");
+    expect(visitorCookie?.value).toMatch(/^[a-f0-9]{64}$/);
+    guestVisitorHash = createHash("sha256").update(`visitor:${visitorCookie!.value}`).digest("hex");
+    await guestPage.reload();
+    await expect(guestPage.getByRole("img", { name: guestName, exact: true })).toBeVisible();
+    await expect(guestPage.getByRole("button", { name: `Убрать лайк ${guestName}`, exact: true })).toHaveAttribute("aria-pressed", "true");
 
     await page.reload();
     await expect(page.getByRole("img", { name: guestName, exact: true })).toBeVisible();
-    await expect(page.getByText("На проверке", { exact: true })).toBeVisible();
-    await page.getByRole("checkbox", { name: `Выбрать фотографию ${guestName}`, exact: true }).check();
-    await page.getByRole("button", { name: "Опубликовать", exact: true }).click();
-    await expect(page.getByText("На проверке", { exact: true })).toHaveCount(0);
-    await guestPage.reload();
-    await expect(guestPage.getByRole("img", { name: guestName, exact: true })).toBeVisible();
 
     await page.getByRole("checkbox", { name: `Выбрать фотографию ${guestName}`, exact: true }).check();
     await page.getByRole("button", { name: "Скрыть", exact: true }).click();
@@ -112,7 +120,8 @@ test("mobile photo batches, guest moderation, original downloads and removal wor
     if (userId) await db.user.delete({ where: { id: userId } });
     await db.authRateLimit.deleteMany({ where: { key: { in: [
       ...(userId ? [`media:upload:${userId}`] : []),
-      ...(eventId ? [`media:upload:${eventId}`, `media:moderate:${eventId}`] : []),
+      ...(eventId ? [`media:upload:${eventId}`, `media:moderate:${eventId}`, `like:event:${eventId}`] : []),
+      ...(guestVisitorHash ? [`like:voter:${guestVisitorHash}`] : []),
     ] } } });
     await db.$disconnect();
   }

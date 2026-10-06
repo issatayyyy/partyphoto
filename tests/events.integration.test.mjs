@@ -83,7 +83,7 @@ test("events, permissions and protected guest albums over HTTP and PostgreSQL", 
       const response = await request("/api/events", { method: "POST", cookie: owner, data: {
         title: "Test <event>", slug: `${namespace}-album`, description: "Private description used for access checks",
         startsAt: new Date(Date.now() + 86400000).toISOString(), expiresAt: new Date(Date.now() + 172800000).toISOString(),
-        allowGuestUploads: true, moderateUploads: false, allowDownloads: false,
+        allowGuestUploads: true, moderateUploads: true, allowDownloads: false,
         maxPhotos: 25, maxStorageMb: 64, maxUploadMb: 5,
       } });
       assert.equal(response.status, 201, await response.clone().text());
@@ -103,6 +103,7 @@ test("events, permissions and protected guest albums over HTTP and PostgreSQL", 
       assert.equal(stored.maxPhotos, 25);
       assert.equal(stored.allowGuestUploads, true);
       assert.equal(stored.moderateUploads, false);
+      assert.equal(event.moderateUploads, false);
       assert.equal(stored.allowDownloads, false);
       assert.equal(typeof event.usedStorageBytes, "string");
       await db.event.update({ where: { id: event.id }, data: { viewCount: 9007199254740993n, downloadCount: 9007199254740995n } });
@@ -125,7 +126,7 @@ test("events, permissions and protected guest albums over HTTP and PostgreSQL", 
       assert.equal(stored.maxStorageBytes, 10737418240n);
       assert.equal(stored.maxUploadBytes, 26214400);
       assert.equal(stored.allowGuestUploads, false);
-      assert.equal(stored.moderateUploads, true);
+      assert.equal(stored.moderateUploads, false);
       assert.equal(stored.allowDownloads, true);
       assert.notEqual(created.code, event.code);
       assert.notEqual(created.slug, event.slug);

@@ -82,7 +82,6 @@ export function EventForm({ event }: { event?: EventDTO }) {
         startsAt: dateFromInput(formData.get("startsAt")),
         expiresAt: dateFromInput(formData.get("expiresAt")),
         allowGuestUploads: formData.has("allowGuestUploads"),
-        moderateUploads: formData.has("moderateUploads"),
         allowDownloads: formData.has("allowDownloads"),
         maxPhotos: Number(formData.get("maxPhotos")),
         maxStorageMb: Number(formData.get("maxStorageMb")),
@@ -170,7 +169,6 @@ export function EventForm({ event }: { event?: EventDTO }) {
         <section className="event-form-section" aria-labelledby={`${formId}-access-heading`}>
           <div className="event-section-heading"><span>02</span><div><h2 id={`${formId}-access-heading`}>Доступ и фотографии</h2><p>Выберите, что смогут делать гости.</p></div></div>
           <label className="checkbox-field"><input name="allowGuestUploads" type="checkbox" defaultChecked={event?.allowGuestUploads ?? false} /><span><strong>Гости могут добавлять фотографии</strong><small>Разрешить загрузку по гостевой ссылке.</small></span></label>
-          <label className="checkbox-field"><input name="moderateUploads" type="checkbox" defaultChecked={event?.moderateUploads ?? true} /><span><strong>Проверять фотографии гостей</strong><small>Публиковать гостевые снимки после одобрения организатором.</small></span></label>
           <label className="checkbox-field"><input name="allowDownloads" type="checkbox" defaultChecked={event?.allowDownloads ?? true} /><span><strong>Разрешить скачивание</strong><small>Гости смогут сохранять фотографии альбома.</small></span></label>
           {event && (
             <div className="password-setting">

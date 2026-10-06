@@ -11,7 +11,7 @@ type PhotoGalleryProps = { maxUploadMb: number; allowDownloads?: boolean } & (
   | { eventId?: never; slug: string; allowUploads: boolean }
 );
 type PhotoPage = { photos: PhotoDTO[]; nextCursor: string | null; error?: string };
-const statusLabels: Record<string, string> = { PENDING: "На проверке", PUBLISHED: "Опубликовано", HIDDEN: "Скрыто", DELETING: "Удаляется", UPLOADING: "Обрабатывается", PROCESSING: "Обрабатывается", FAILED: "Ошибка обработки" };
+const statusLabels: Record<string, string> = { PENDING: "Не опубликовано", PUBLISHED: "Опубликовано", HIDDEN: "Скрыто", DELETING: "Удаляется", UPLOADING: "Обрабатывается", PROCESSING: "Обрабатывается", FAILED: "Ошибка обработки" };
 
 export function PhotoGallery({ eventId, slug, allowUploads = true, allowDownloads = true, maxUploadMb }: PhotoGalleryProps) {
   const router = useRouter();

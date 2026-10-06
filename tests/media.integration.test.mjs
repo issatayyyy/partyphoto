@@ -90,6 +90,7 @@ test("photo upload, access, moderation, quotas and physical storage over HTTP", 
   let guestPhoto;
   let guestCookie;
   let jpeg;
+  let guestVisitor;
   try {
     const passwordHash = await argon2.hash(randomUUID(), { type: argon2.argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1 });
     for (const [name, role] of [["owner", "ORGANIZER"], ["foreign", "ORGANIZER"], ["photographer", "PHOTOGRAPHER"], ["admin", "ADMIN"]]) {
@@ -204,28 +205,31 @@ test("photo upload, access, moderation, quotas and physical storage over HTTP", 
       assert.equal((await request(`/api/events/${main.id}/photos/moderate`, { method: "POST", cookie: users.foreign.cookie, data: { ids: [photo.id], action: "hide" } })).status, 404);
     });
 
-    await t.test("guest uploads require permission and enter moderation until explicitly published", async () => {
+    await t.test("guest uploads require permission and publish immediately despite the legacy approval flag", async () => {
       await db.event.update({ where: { id: main.id }, data: { allowGuestUploads: false } });
       assert.equal((await upload(guestPath, jpeg)).status, 403);
       await db.event.update({ where: { id: main.id }, data: { allowGuestUploads: true } });
       const uploaded = await upload(guestPath, jpeg, { filename: "guest.jpg" });
       assert.equal(uploaded.status, 201);
       guestPhoto = (await uploaded.json()).photo;
-      assert.equal(guestPhoto.status, "PENDING");
-      const pending = await db.photo.findUniqueOrThrow({ where: { id: guestPhoto.id } });
-      assert.equal(pending.uploaderId, null);
+      assert.equal(guestPhoto.status, "PUBLISHED");
+      const stored = await db.photo.findUniqueOrThrow({ where: { id: guestPhoto.id } });
+      assert.equal(stored.uploaderId, null);
       const guestList = await request(guestPath);
       assert.equal(guestList.status, 200);
+      guestVisitor = cookieFrom(guestList);
+      assert.match(guestVisitor, /^partyphoto_visitor=[a-f0-9]{64}$/);
       const listed = (await guestList.json()).photos;
       assert.ok(listed.every(item => item.status === "PUBLISHED"));
-      assert.equal(listed.some(item => item.id === guestPhoto.id), false);
+      assert.equal(listed.some(item => item.id === guestPhoto.id), true);
       assertNoKeys(listed);
-      assert.equal((await request(`/api/photos/${guestPhoto.id}/thumbnail`)).status, 404);
-      assert.equal((await request(`/api/photos/${guestPhoto.id}/original`)).status, 404);
-      const published = await request(`/api/events/${main.id}/photos/moderate`, { method: "POST", cookie: users.owner.cookie, data: { ids: [guestPhoto.id], action: "publish" } });
-      assert.equal(published.status, 200);
-      assert.ok((await (await request(guestPath)).json()).photos.some(item => item.id === guestPhoto.id));
       assert.equal((await request(`/api/photos/${guestPhoto.id}/thumbnail`)).status, 200);
+      const original = await request(`/api/photos/${guestPhoto.id}/original`);
+      assert.equal(original.status, 200);
+      assert.deepEqual(Buffer.from(await original.arrayBuffer()), jpeg);
+      const liked = await request(`/api/photos/${guestPhoto.id}/like`, { method: "PUT", cookie: guestVisitor, data: { liked: true } });
+      assert.equal(liked.status, 200);
+      assert.deepEqual(await liked.json(), { liked: true, likeCount: 1 });
     });
 
     await t.test("download permissions and hidden state are rechecked for each media request", async () => {
@@ -256,7 +260,7 @@ test("photo upload, access, moderation, quotas and physical storage over HTTP", 
       const uploaded = await upload(path, jpeg, { cookie: guestCookie, filename: "private-guest.jpg" });
       assert.equal(uploaded.status, 201);
       const privatePhoto = (await uploaded.json()).photo;
-      await request(`/api/events/${protectedEvent.id}/photos/moderate`, { method: "POST", cookie: users.owner.cookie, data: { ids: [privatePhoto.id], action: "publish" } });
+      assert.equal(privatePhoto.status, "PUBLISHED");
       assert.equal((await request(`/api/photos/${privatePhoto.id}/thumbnail`)).status, 401);
       assert.equal((await request(`/api/photos/${privatePhoto.id}/original`)).status, 401);
       assert.equal((await request(`/api/photos/${privatePhoto.id}/thumbnail`, { cookie: guestCookie })).status, 200);
@@ -272,9 +276,12 @@ test("photo upload, access, moderation, quotas and physical storage over HTTP", 
       assert.equal((await request(`/api/photos/${privatePhoto.id}/original`, { cookie: guestCookie })).status, 404);
     });
 
-    await t.test("concurrent uploads cannot overrun the photo or combined original/preview storage quota", async () => {
+    await t.test("concurrent staff and guest uploads share photo and combined original/preview storage quotas", async () => {
       const countEvent = await seedEvent("count", { maxPhotos: 1 });
-      const countResponses = await Promise.all([1, 2].map(index => upload(`/api/events/${countEvent.id}/photos`, jpeg, { cookie: users.owner.cookie, filename: `race-${index}.jpg` })));
+      const countResponses = await Promise.all([
+        upload(`/api/events/${countEvent.id}/photos`, jpeg, { cookie: users.owner.cookie, filename: "race-staff.jpg" }),
+        upload(`/api/albums/${countEvent.slug}/photos`, jpeg, { filename: "race-guest.jpg" }),
+      ]);
       assert.equal(countResponses.filter(item => item.status === 201).length, 1);
       assert.ok(countResponses.filter(item => item.status !== 201).every(item => item.status === 409));
       assert.equal(await db.photo.count({ where: { eventId: countEvent.id } }), 1);
@@ -282,7 +289,10 @@ test("photo upload, access, moderation, quotas and physical storage over HTTP", 
       const original = await db.photo.findUniqueOrThrow({ where: { id: photo.id } });
       const bytesForOne = original.sizeBytes + original.thumbnailBytes;
       const sizeEvent = await seedEvent("size", { maxStorageBytes: bytesForOne });
-      const sizeResponses = await Promise.all([1, 2].map(index => upload(`/api/events/${sizeEvent.id}/photos`, jpeg, { cookie: users.owner.cookie, filename: `size-${index}.jpg` })));
+      const sizeResponses = await Promise.all([
+        upload(`/api/events/${sizeEvent.id}/photos`, jpeg, { cookie: users.owner.cookie, filename: "size-staff.jpg" }),
+        upload(`/api/albums/${sizeEvent.slug}/photos`, jpeg, { filename: "size-guest.jpg" }),
+      ]);
       assert.equal(sizeResponses.filter(item => item.status === 201).length, 1);
       assert.ok(sizeResponses.filter(item => item.status !== 201).every(item => item.status === 409));
       const stored = await db.event.findUniqueOrThrow({ where: { id: sizeEvent.id } });
@@ -322,7 +332,8 @@ test("photo upload, access, moderation, quotas and physical storage over HTTP", 
     await db.authRateLimit.deleteMany({ where: { key: { in: [
       ...userIds.flatMap(id => [`event:create:${id}`, `event:update:${id}`]),
       ...userIds.map(id => `media:upload:${id}`),
-      ...eventIds.flatMap(id => [`album:unlock:${id}`, `album:resolve:${id}`, `media:upload:${id}`, `media:moderate:${id}`]),
+      ...eventIds.flatMap(id => [`album:unlock:${id}`, `album:resolve:${id}`, `media:upload:${id}`, `media:moderate:${id}`, `like:event:${id}`]),
+      ...(guestVisitor ? [`like:voter:${hash(`visitor:${guestVisitor.split("=")[1]}`)}`] : []),
     ] } } });
     await db.$disconnect();
     s3.destroy();

@@ -221,19 +221,23 @@ test("idempotent photo likes and private ZIP archives over HTTP, PostgreSQL and 
       assert.equal(cached.status, 200); assert.equal((await cached.json()).job.id, done.id);
     });
 
-    await t.test("an unpublished guest upload leaves the cached published ZIP valid", async () => {
+    await t.test("a guest photo is published and likable immediately and invalidates the previous ZIP snapshot", async () => {
       const before = await db.event.findUniqueOrThrow({ where: { id: main.id } });
       const form = new FormData();
-      form.append("file", new Blob([jpegB], { type: "image/jpeg" }), "pending-new-upload.jpg");
+      form.append("file", new Blob([jpegB], { type: "image/jpeg" }), "guest-published-upload.jpg");
       const uploaded = await fetch(new URL(`/api/albums/${main.slug}/photos`, base), { method: "POST", headers: { origin: base.origin, cookie: guest }, body: form });
       assert.equal(uploaded.status, 201, await uploaded.clone().text());
-      assert.equal((await uploaded.json()).photo.status, "PENDING");
-      assert.equal((await db.event.findUniqueOrThrow({ where: { id: main.id } })).mediaVersion, before.mediaVersion);
+      const photo = (await uploaded.json()).photo;
+      assert.equal(photo.status, "PUBLISHED");
+      assert.ok((await db.event.findUniqueOrThrow({ where: { id: main.id } })).mediaVersion > before.mediaVersion);
+      const photos = await request(`/api/albums/${main.slug}/photos`, { cookie: guest });
+      assert.ok((await photos.json()).photos.some(item => item.id === photo.id));
+      const liked = await request(`/api/photos/${photo.id}/like`, { method: "PUT", cookie: guest, data: { liked: true } });
+      assert.equal(liked.status, 200); assert.deepEqual(await liked.json(), { liked: true, likeCount: 1 });
       const current = await request(`/api/albums/${main.slug}/zip`, { cookie: guest });
-      assert.equal((await current.json()).job.id, done.id);
+      assert.equal((await current.json()).job, null);
       const archive = await request(`/api/zip/${done.id}/download`, { cookie: guest });
-      assert.equal(archive.status, 200);
-      assert.equal((await readZip(Buffer.from(await archive.arrayBuffer()))).length, 2);
+      assert.equal(archive.status, 409);
     });
 
     await t.test("published-set changes revoke and remove old archives; a refreshed ZIP excludes hidden photos", async () => {
@@ -253,7 +257,9 @@ test("idempotent photo likes and private ZIP archives over HTTP, PostgreSQL and 
       const archive = await request(`/api/zip/${done.id}/download`, { cookie: guest });
       assert.equal(archive.status, 200);
       const entries = await readZip(Buffer.from(await archive.arrayBuffer()));
-      assert.equal(entries.length, 1); assert.deepEqual(entries[0].bytes, jpegA);
+      assert.equal(entries.length, 2);
+      assert.ok(entries.some(entry => entry.name === "guest-published-upload.jpg"));
+      assert.deepEqual(entries.map(entry => hash(entry.bytes)).sort(), [hash(jpegA), hash(jpegB)].sort());
       const mediaBeforeLike = (await db.event.findUniqueOrThrow({ where: { id: main.id } })).mediaVersion;
       assert.equal((await request(`/api/photos/${first.id}/like`, { method: "PUT", cookie: guest, data: { liked: false } })).status, 200);
       assert.equal((await db.event.findUniqueOrThrow({ where: { id: main.id } })).mediaVersion, mediaBeforeLike);
