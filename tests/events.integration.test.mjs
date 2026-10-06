@@ -13,7 +13,7 @@ const db = new PrismaClient();
 const namespace = `event-check-${randomUUID()}`;
 const hash = value => createHash("sha256").update(value).digest("hex");
 const identities = {};
-const password = `Album ${randomUUID()}`;
+const password = "abc";
 const cookieFrom = response => response.headers.get("set-cookie")?.split(";")[0];
 
 async function request(path, { method = "GET", data, cookie, origin = base.origin, type = "application/json", raw } = {}) {
@@ -69,7 +69,7 @@ test("events, permissions and protected guest albums over HTTP and PostgreSQL", 
         { title: "Valid title", role: "ADMIN" }, { title: "Valid title", slug: "Bad Slug!" },
         { title: "Valid title", slug: "resolve" },
         { title: "Valid title", maxPhotos: 0 }, { title: "Valid title", maxStorageMb: 9 },
-        { title: "Valid title", maxUploadMb: 26 }, { title: "Valid title", password: "short" },
+        { title: "Valid title", maxUploadMb: 26 }, { title: "Valid title", password: "ab" },
         { title: "Valid title", expiresAt: "not-a-date" },
         { title: "Valid title", expiresAt: new Date(0).toISOString() },
         { title: "Valid title", startsAt: new Date(Date.now() + 172800000).toISOString(), expiresAt: new Date(Date.now() + 86400000).toISOString() },
@@ -208,6 +208,7 @@ test("events, permissions and protected guest albums over HTTP and PostgreSQL", 
       assert.equal(html.includes("Private description used for access checks"), false);
       const unlockPath = `/api/albums/${event.slug}/unlock`;
       assert.equal((await request(unlockPath, { method: "POST", data: { password }, origin: "https://foreign.example" })).status, 403);
+      assert.equal((await request(unlockPath, { method: "POST", data: { password: "ab" } })).status, 400);
       assert.equal((await request(unlockPath, { method: "POST", data: { password: "wrong-password" } })).status, 401);
       const unlocked = await request(unlockPath, { method: "POST", data: { password } });
       assert.equal(unlocked.status, 200);

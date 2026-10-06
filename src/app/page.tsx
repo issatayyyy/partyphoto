@@ -14,7 +14,7 @@ export default function Home() {
       <h1>Вечер закончится.<br/><em>Фотографии останутся.</em></h1>
       <p className="intro">Все снимки вашего мероприятия — в одном месте. Откройте альбом по ссылке или QR-коду от организатора.</p>
       <div className="hero-actions"><Link className="button button-primary" href="/join">Открыть альбом по коду <span aria-hidden="true">↗</span></Link><Link className="text-link" href="/register">Я организатор</Link></div>
-      <div className="notice"><strong>Ваше мероприятие — уже в PartyPhoto</strong><p>Создайте аккаунт и мероприятие, получите ссылку и QR-код для гостей. Загрузка и просмотр фотографий появятся на следующем этапе.</p></div>
+      <div className="notice"><strong>Ваше мероприятие — уже в PartyPhoto</strong><p>Создайте мероприятие, загрузите снимки и отправьте гостям ссылку или QR-код. Они смогут смотреть галерею и сохранять фотографии в оригинальном качестве.</p></div>
     </section>
     <section className="features" aria-label="Как это работает">
       {[['01', 'Откройте альбом', 'Получите ссылку или отсканируйте QR-код на мероприятии.'], ['02', 'Найдите свои моменты', 'Смотрите фотографии с телефона, делитесь впечатлениями.'], ['03', 'Сохраните воспоминания', 'Скачивайте любимые кадры в оригинальном качестве.']].map(([n, title, description]) => <article key={n}><span>{n}</span><h2>{title}</h2><p>{description}</p></article>)}

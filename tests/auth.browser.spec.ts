@@ -5,7 +5,7 @@ import { createHash, randomUUID } from "node:crypto";
 test("registration, dashboard, logout and login work on mobile", async ({ page }) => {
   const db = new PrismaClient();
   const email = `browser-check-${randomUUID()}@example.invalid`;
-  const password = randomUUID();
+  const password = randomUUID().slice(0, 8);
   const subject = createHash("sha256").update(email).digest("hex");
   try {
     await page.setViewportSize({ width: 390, height: 844 });
@@ -16,6 +16,12 @@ test("registration, dashboard, logout and login work on mobile", async ({ page }
     await page.screenshot({ path: test.info().outputPath("register-mobile.png"), fullPage: true });
     await page.getByLabel("Ваше имя", { exact: true }).fill("Проверка браузера");
     await page.getByLabel("Email", { exact: true }).fill(email);
+    await page.getByLabel("Пароль", { exact: true }).fill("1234567");
+    await page.getByRole("button", { name: "Создать аккаунт" }).click();
+    await expect(page).toHaveURL(/\/register$/);
+    await expect(page.locator("form").getByRole("alert")).toBeVisible();
+    await expect(page.getByLabel("Пароль", { exact: true })).toHaveAttribute("aria-invalid", "true");
+    expect(await page.locator("form").evaluate(form => (form as HTMLFormElement).noValidate)).toBe(true);
     await page.getByLabel("Пароль", { exact: true }).fill(password);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.getByRole("button", { name: "Создать аккаунт" }).click();

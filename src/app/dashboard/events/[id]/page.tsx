@@ -5,6 +5,7 @@ import { EventDate } from "@/components/event-date";
 import { EventForm } from "@/components/event-form";
 import { EventShare } from "@/components/event-share";
 import { LogoutButton } from "@/components/logout-button";
+import { PhotoGallery } from "@/components/photo-gallery";
 import { getCurrentUser } from "@/lib/auth";
 import { getEventForUser } from "@/lib/events";
 
@@ -27,6 +28,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
       <header><Link className="brand" href="/">partyphoto<span>●</span></Link><nav className="header-nav" aria-label="Навигация"><Link className="header-link" href="/dashboard">Личный кабинет</Link><LogoutButton /></nav></header>
       <section className="event-page-heading" aria-labelledby="event-title"><Link className="back-link" href="/dashboard">← Все мероприятия</Link><p className="eyebrow">{event.canManage ? "УПРАВЛЕНИЕ МЕРОПРИЯТИЕМ" : "ВАШЕ МЕРОПРИЯТИЕ"}</p><h1 id="event-title">{event.title}</h1><div className="event-heading-tags"><span className="status-pill">{event.hasPassword ? "С паролем" : "Доступ по ссылке"}</span>{event.expiresAt && <span className="event-expiry">До <EventDate value={event.expiresAt}/></span>}</div></section>
       <section className="event-statistics" aria-label="Статистика мероприятия"><div><span>Фотографии</span><strong>{event.photoCount.toLocaleString("ru-RU")}</strong><small>из {event.maxPhotos.toLocaleString("ru-RU")}</small></div><div><span>Просмотры</span><strong>{BigInt(event.viewCount).toLocaleString("ru-RU")}</strong></div><div><span>Скачивания</span><strong>{BigInt(event.downloadCount).toLocaleString("ru-RU")}</strong></div><div><span>Занято места</span><strong>{formatBytes(event.usedStorageBytes)}</strong><small>из {event.maxStorageMb.toLocaleString("ru-RU")} МБ</small></div></section>
+      <PhotoGallery eventId={event.id} maxUploadMb={event.maxUploadMb} />
       <div className="event-detail-layout"><div>{event.canManage ? <EventForm event={event} /> : <section className="event-readonly"><h2>О мероприятии</h2><p>{event.description || "Организатор пока не добавил описание."}</p><p className="field-help">Настройки этого альбома изменяет организатор.</p></section>}</div><EventShare event={event} /></div>
       <footer>PartyPhoto <span>Собираем моменты вместе.</span></footer>
     </main>

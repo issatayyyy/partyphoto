@@ -1,9 +1,15 @@
-# Use with: docker compose -f compose.yaml -f compose.production.yaml up -d --build app
-# Requires a managed S3 bucket. Local MinIO is disabled by its profile.
+# Use with: docker compose -f compose.yaml -f compose.production.yaml up -d --build app worker
+# Requires a managed private S3 bucket. Local SeaweedFS is disabled by its profile.
 services:
   storage:
     profiles: ["local-storage"]
   app:
+    environment:
+      S3_ENDPOINT: ${S3_ENDPOINT:?Set production S3 endpoint}
+    depends_on: !override
+      db:
+        condition: service_healthy
+  worker:
     environment:
       S3_ENDPOINT: ${S3_ENDPOINT:?Set production S3 endpoint}
     depends_on: !override

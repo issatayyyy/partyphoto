@@ -24,11 +24,18 @@ test("organizer creates an event on mobile and shares its public album", async (
     await page.getByRole("link", { name: "Создать мероприятие", exact: true }).click();
     await page.getByLabel("Название мероприятия", { exact: true }).fill(title);
     await page.getByLabel(/^Описание/).fill(description);
+    await page.getByLabel(/^Пароль альбома/).fill("ab");
+    await page.getByRole("button", { name: "Создать мероприятие", exact: true }).click();
+    await expect(page.locator("form").getByRole("alert")).toBeVisible();
+    await expect(page.getByLabel(/^Пароль альбома/)).toHaveAttribute("aria-invalid", "true");
+    expect(await page.locator("form").evaluate(form => (form as HTMLFormElement).noValidate)).toBe(true);
+    await page.getByLabel(/^Пароль альбома/).fill("");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.getByRole("button", { name: "Создать мероприятие", exact: true }).click();
     await expect(page).toHaveURL(/\/dashboard\/events\/[^/]+$/);
     await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
     const event = await db.event.findFirstOrThrow({ where: { ownerId: user.id, title } });
+    expect(event.passwordHash).toBeNull();
     await expect(page.getByText(event.code, { exact: true })).toBeVisible();
     const albumLink = page.getByRole("link", { name: /^Открыть альбом/ });
     await expect(albumLink).toHaveAttribute("href", new URL(`/e/${event.slug}`, baseURL).href);
@@ -70,7 +77,7 @@ test("guest password form protects the description and keeps access after reload
   const namespace = `guest-browser-${randomUUID()}`;
   const title = `Закрытый альбом ${randomUUID().slice(0, 8)}`;
   const description = "Эта информация доступна только после ввода пароля.";
-  const password = `Guest ${randomUUID()}`;
+  const password = "abc";
   let userId: string | undefined;
   let eventId: string | undefined;
   try {
@@ -83,6 +90,11 @@ test("guest password form protects the description and keeps access after reload
     await page.goto(`/e/${event.slug}`);
     await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
     await expect(page.getByText(description, { exact: true })).toHaveCount(0);
+    await page.getByLabel("Пароль альбома", { exact: true }).fill("ab");
+    await page.getByRole("button", { name: "Открыть альбом", exact: true }).click();
+    await expect(page.locator("form").getByRole("alert")).toBeVisible();
+    await expect(page.getByLabel("Пароль альбома", { exact: true })).toHaveAttribute("aria-invalid", "true");
+    expect(await page.locator("form").evaluate(form => (form as HTMLFormElement).noValidate)).toBe(true);
     await page.getByLabel("Пароль альбома", { exact: true }).fill("wrong-password");
     await page.getByRole("button", { name: "Открыть альбом", exact: true }).click();
     await expect(page.locator("form").getByRole("alert")).toHaveText("Неверный пароль альбома.");

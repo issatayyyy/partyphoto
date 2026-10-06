@@ -24,7 +24,7 @@ const fields = {
   maxPhotos: z.number().int().min(1).max(10000),
   maxStorageMb: z.number().int().min(10).max(102400),
   maxUploadMb: z.number().int().min(1).max(25),
-  password: z.string().max(128).refine(value => value === "" || value.length >= 12, "Пароль: 12–128 символов."),
+  password: z.string().max(128).refine(value => value === "" || value.length >= 3, "Пароль альбома: 3–128 символов."),
 };
 const createSchema = z.object({
   title: fields.title,

@@ -1,16 +1,28 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useRef, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 
 export function AlbumAccess({ slug }: { slug?: string }) {
   const router = useRouter();
   const submitting = useRef(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [fieldError, setFieldError] = useState("");
+  const inputId = useId();
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submitting.current) return;
     const data = new FormData(event.currentTarget);
+    const value = String(data.get(slug ? "password" : "code") ?? "");
+    const validationError = slug
+      ? (value.length < 3 || value.length > 128 ? "Пароль альбома должен содержать от 3 до 128 символов." : "")
+      : (!/^[a-z0-9]{8}$/i.test(value.trim()) ? "Введите код мероприятия из 8 букв и цифр." : "");
+    setError(""); setFieldError(validationError);
+    if (validationError) {
+      const input = event.currentTarget.elements.namedItem(slug ? "password" : "code");
+      if (input instanceof HTMLInputElement) input.focus();
+      return;
+    }
     submitting.current = true; setPending(true); setError("");
     try {
       const response = await fetch(slug ? `/api/albums/${slug}/unlock` : "/api/albums/resolve", {
@@ -24,10 +36,12 @@ export function AlbumAccess({ slug }: { slug?: string }) {
     } catch { setError("Не удалось связаться с сервером. Попробуйте ещё раз."); }
     finally { submitting.current = false; setPending(false); }
   }
-  return <form onSubmit={submit} className="album-access" aria-busy={pending}>
+  return <form noValidate onSubmit={submit} className="album-access" aria-busy={pending}>
     <div className="form-field">
-      <label htmlFor={slug ? "album-password" : "album-code"}>{slug ? "Пароль альбома" : "Код мероприятия"}</label>
-      <input id={slug ? "album-password" : "album-code"} name={slug ? "password" : "code"} type={slug ? "password" : "text"} required minLength={slug ? 1 : 8} maxLength={slug ? 128 : 8} autoComplete={slug ? "current-password" : "off"} autoCapitalize={slug ? "none" : "characters"} spellCheck={false} disabled={pending}/>
+      <label htmlFor={inputId}>{slug ? "Пароль альбома" : "Код мероприятия"}</label>
+      <input id={inputId} name={slug ? "password" : "code"} type={slug ? "password" : "text"} required minLength={slug ? 3 : 8} maxLength={slug ? 128 : 8} autoComplete={slug ? "current-password" : "off"} autoCapitalize={slug ? "none" : "characters"} spellCheck={false} disabled={pending} aria-invalid={Boolean(fieldError)} aria-describedby={`${inputId}-help${fieldError ? ` ${inputId}-error` : ""}`} onChange={() => {setFieldError("");setError("");}}/>
+      <p className="field-help" id={`${inputId}-help`}>{slug ? "От 3 до 128 символов. Пароль можно получить у организатора." : "Код из 8 символов указан в приглашении от организатора."}</p>
+      {fieldError && <p className="field-error" id={`${inputId}-error`} role="alert">{fieldError}</p>}
     </div>
     <button type="submit" className="button button-primary" disabled={pending}>{pending ? "Открываем…" : "Открыть альбом"}</button>
     {error && <p className="form-error" role="alert">{error}</p>}

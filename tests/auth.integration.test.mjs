@@ -14,6 +14,7 @@ const namespace = `auth-check-${randomUUID()}`;
 const email = `${namespace}@example.invalid`;
 const raceEmail = `${namespace}-race@example.invalid`;
 const limitedEmail = `${namespace}-limited@example.invalid`;
+const boundaryEmail = `${namespace}-boundary@example.invalid`;
 const password = `  ${randomUUID()}  `;
 const hash = value => createHash("sha256").update(value).digest("hex");
 const cookieFrom = response => response.headers.get("set-cookie")?.split(";")[0];
@@ -43,9 +44,21 @@ test("organizer authentication over HTTP and PostgreSQL", async t => {
       assert.equal((await post("/api/auth/register", {}, { type: "text/plain" })).status, 415);
       assert.equal((await post("/api/auth/register", {}, { raw: "{" })).status, 400);
       assert.equal((await post("/api/auth/register", {}, { raw: "x".repeat(8193) })).status, 413);
-      assert.equal((await post("/api/auth/register", { name: "Test", email, password: "short" })).status, 400);
+      assert.equal((await post("/api/auth/register", { name: "Test", email, password: "1234567" })).status, 400);
+      assert.equal((await post("/api/auth/login", { email, password: "1234567" })).status, 400);
       assert.equal((await post("/api/auth/register", { name: "Test", email, password, role: "ADMIN" })).status, 400);
       assert.equal(await db.user.count({ where: { email } }), 0);
+    });
+
+    await t.test("an eight-character account password works for registration and login", async () => {
+      const boundaryPassword = randomUUID().slice(0, 8);
+      const registered = await post("/api/auth/register", { name: "Boundary check", email: boundaryEmail, password: boundaryPassword });
+      assert.equal(registered.status, 201);
+      const stored = await db.user.findUniqueOrThrow({ where: { email: boundaryEmail } });
+      assert.equal(await argon2.verify(stored.passwordHash, boundaryPassword), true);
+      const loggedIn = await post("/api/auth/login", { email: boundaryEmail, password: boundaryPassword }, { cookie: cookieFrom(registered) });
+      assert.equal(loggedIn.status, 200);
+      assert.equal((await me(cookieFrom(loggedIn))).status, 200);
     });
 
     let cookie;
@@ -140,8 +153,8 @@ test("organizer authentication over HTTP and PostgreSQL", async t => {
     });
   } finally {
     // Remove only this run's fixture users/counters; leave application data intact.
-    await db.user.deleteMany({ where: { email: { in: [email, raceEmail] } } });
-    const subjects = [email, raceEmail, limitedEmail, `${namespace}-missing@example.invalid`];
+    await db.user.deleteMany({ where: { email: { in: [email, raceEmail, boundaryEmail] } } });
+    const subjects = [email, raceEmail, limitedEmail, boundaryEmail, `${namespace}-missing@example.invalid`];
     await db.authRateLimit.deleteMany({ where: { key: { in: subjects.flatMap(subject => ["login", "register"].map(action => `auth:${action}:${hash(subject)}`)) } } });
     await db.$disconnect();
   }

@@ -102,6 +102,7 @@ model Photo {
   mimeType        String
   sizeBytes       BigInt
   thumbnailBytes  BigInt      @default(0)
+  reservedBytes   BigInt      @default(0)
   width           Int?
   height          Int?
   status          PhotoStatus @default(UPLOADING)

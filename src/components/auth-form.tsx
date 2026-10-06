@@ -14,6 +14,7 @@ export function AuthForm({ mode }: AuthFormProps) {
   const submitting = useRef(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const isRegister = mode === "register";
   const errorId = `${inputId}-error`;
 
@@ -24,8 +25,20 @@ export function AuthForm({ mode }: AuthFormProps) {
     const formData = new FormData(event.currentTarget);
     const email = String(formData.get("email") ?? "").trim();
     const password = String(formData.get("password") ?? "");
+    const name = String(formData.get("name") ?? "").trim();
+    const validationErrors: Record<string, string> = {};
+    if (isRegister && (name.length < 2 || name.length > 80)) validationErrors.name = "Введите имя от 2 до 80 символов.";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) validationErrors.email = "Введите корректный email, например you@example.com.";
+    if (password.length < 8 || password.length > 128) validationErrors.password = "Пароль должен содержать от 8 до 128 символов.";
+    setFieldErrors(validationErrors);
+    setError("");
+    if (Object.keys(validationErrors).length) {
+      const firstField = event.currentTarget.elements.namedItem(Object.keys(validationErrors)[0]);
+      if (firstField instanceof HTMLInputElement) firstField.focus();
+      return;
+    }
     const values = isRegister
-      ? { name: String(formData.get("name") ?? "").trim(), email, password }
+      ? { name, email, password }
       : { email, password };
 
     submitting.current = true;
@@ -71,7 +84,11 @@ export function AuthForm({ mode }: AuthFormProps) {
         <h2>{isRegister ? "Создать аккаунт" : "Войти в аккаунт"}</h2>
         <p>{isRegister ? "Начните с аккаунта организатора." : "Ваши события начинаются здесь."}</p>
       </div>
-      <form onSubmit={handleSubmit} aria-describedby={error ? errorId : undefined} aria-busy={pending}>
+      <form noValidate onSubmit={handleSubmit} onChange={(event) => {
+        const target = event.target;
+        if (target instanceof HTMLInputElement) setFieldErrors((current) => ({ ...current, [target.name]: "" }));
+        setError("");
+      }} aria-describedby={error ? errorId : undefined} aria-busy={pending}>
         <fieldset className="auth-fields" disabled={pending}>
           <legend className="sr-only">{isRegister ? "Данные нового аккаунта" : "Данные для входа"}</legend>
           {isRegister && (
@@ -85,8 +102,11 @@ export function AuthForm({ mode }: AuthFormProps) {
                 minLength={2}
                 maxLength={80}
                 placeholder="Как к вам обращаться"
+                aria-invalid={Boolean(fieldErrors.name)}
+                aria-describedby={fieldErrors.name ? `${inputId}-name-error` : undefined}
                 required
               />
+              {fieldErrors.name && <p className="field-error" id={`${inputId}-name-error`} role="alert">{fieldErrors.name}</p>}
             </div>
           )}
           <div className="form-field">
@@ -101,8 +121,11 @@ export function AuthForm({ mode }: AuthFormProps) {
               spellCheck={false}
               maxLength={254}
               placeholder="you@example.com"
+              aria-invalid={Boolean(fieldErrors.email)}
+              aria-describedby={fieldErrors.email ? `${inputId}-email-error` : undefined}
               required
             />
+            {fieldErrors.email && <p className="field-error" id={`${inputId}-email-error`} role="alert">{fieldErrors.email}</p>}
           </div>
           <div className="form-field">
             <label htmlFor={`${inputId}-password`}>Пароль</label>
@@ -111,12 +134,14 @@ export function AuthForm({ mode }: AuthFormProps) {
               name="password"
               type="password"
               autoComplete={isRegister ? "new-password" : "current-password"}
-              minLength={isRegister ? 12 : 1}
+              minLength={8}
               maxLength={128}
-              aria-describedby={isRegister ? `${inputId}-password-help` : undefined}
+              aria-invalid={Boolean(fieldErrors.password)}
+              aria-describedby={`${inputId}-password-help${fieldErrors.password ? ` ${inputId}-password-error` : ""}`}
               required
             />
-            {isRegister && <p className="field-help" id={`${inputId}-password-help`}>От 12 до 128 символов. Подойдёт длинная фраза.</p>}
+            <p className="field-help" id={`${inputId}-password-help`}>От 8 до 128 символов.</p>
+            {fieldErrors.password && <p className="field-error" id={`${inputId}-password-error`} role="alert">{fieldErrors.password}</p>}
           </div>
           <button className="button button-primary auth-submit" type="submit" disabled={pending}>
             {pending ? (isRegister ? "Создаём аккаунт…" : "Входим…") : (isRegister ? "Создать аккаунт" : "Войти")}

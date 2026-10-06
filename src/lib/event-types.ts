@@ -22,4 +22,4 @@ export type EventDTO = {
   url: string;
 };
 
-export type GuestEventDTO = Pick<EventDTO, "id" | "title" | "slug" | "description" | "startsAt" | "expiresAt" | "allowGuestUploads" | "allowDownloads" | "photoCount">;
+export type GuestEventDTO = Pick<EventDTO, "id" | "title" | "slug" | "description" | "startsAt" | "expiresAt" | "allowGuestUploads" | "allowDownloads" | "maxUploadMb" | "photoCount">;

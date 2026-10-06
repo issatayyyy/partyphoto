@@ -28,12 +28,13 @@ export async function getGuestAlbum(slug: string): Promise<{ title: string; slug
     id: event.id, title: event.title, slug: event.slug, description: event.description,
     startsAt: event.startsAt?.toISOString() ?? null, expiresAt: event.expiresAt?.toISOString() ?? null,
     allowDownloads: event.allowDownloads, allowGuestUploads: event.allowGuestUploads, photoCount: event._count.photos,
+    maxUploadMb: event.maxUploadBytes / 1048576,
   } : null };
 }
 
 export async function unlockAlbum(slug: string, input: unknown, response: NextResponse) {
-  const parsed = z.object({ password: z.string().min(1).max(128) }).strict().safeParse(input);
-  if (!parsed.success) throw new AuthError(400, "Введите пароль альбома.");
+  const parsed = z.object({ password: z.string().min(3).max(128) }).strict().safeParse(input);
+  if (!parsed.success) throw new AuthError(400, "Пароль альбома должен содержать от 3 до 128 символов.");
   const event = await db.event.findUnique({ where: { slug } });
   if (!event || event.deletedAt || (event.expiresAt && event.expiresAt <= new Date())) throw new AuthError(404, "Альбом недоступен.");
   await consumeRateLimit("album:unlock:global", 120, 60);
