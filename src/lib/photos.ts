@@ -12,6 +12,7 @@ import { consumeRateLimit } from "./auth-rate-limit";
 import { visibleEvents } from "./events";
 import { deleteMedia, getMedia, putMedia } from "./storage";
 import type { PhotoDTO } from "./photo-types";
+import { voterHash } from "./visitor";
 
 type Actor = { kind: "staff"; userId: string; sessionHash: string } | { kind: "guest"; grantHash?: string; accessVersion: number };
 export type PhotoAccess = { event: Event; actor: Actor };
@@ -38,7 +39,7 @@ export async function guestPhotoAccess(slug: string): Promise<PhotoAccess> {
 }
 
 // Runs inside the event lock for uploads/mutations and immediately before reads.
-async function authorize(tx: Prisma.TransactionClient, event: Event, actor: Actor, upload = false) {
+export async function authorize(tx: Prisma.TransactionClient, event: Event, actor: Actor, upload = false) {
   if (event.deletedAt) throw new AuthError(404, "Альбом недоступен.");
   if (actor.kind === "staff") {
     const session = await tx.session.findFirst({ where: { tokenHash: actor.sessionHash, userId: actor.userId, expiresAt: { gt: new Date() }, user: { disabledAt: null } }, include: { user: true } });
@@ -55,16 +56,18 @@ async function authorize(tx: Prisma.TransactionClient, event: Event, actor: Acto
   }
 }
 
-export function photoDTO(photo: Photo, access: PhotoAccess): PhotoDTO {
+export function photoDTO(photo: Photo, access: PhotoAccess, likes = { likeCount: 0, liked: false }): PhotoDTO {
   return { id: photo.id, filename: photo.filename, width: photo.width ?? 1, height: photo.height ?? 1, status: photo.status,
     sizeBytes: photo.sizeBytes.toString(), createdAt: photo.createdAt.toISOString(),
     thumbnailUrl: `/api/photos/${photo.id}/thumbnail`,
     downloadUrl: access.actor.kind === "staff" || access.event.allowDownloads ? `/api/photos/${photo.id}/original` : null,
+    ...likes,
   };
 }
 
 export async function listPhotos(access: PhotoAccess, cursor?: string) {
   if (cursor && !/^[a-zA-Z0-9-]{1,100}$/.test(cursor)) throw new AuthError(400, "Некорректная страница фотографий.");
+  const voter = await voterHash(access);
   return db.$transaction(async tx => {
     const event = await tx.event.findUniqueOrThrow({ where: { id: access.event.id } });
     await authorize(tx, event, access.actor);
@@ -75,9 +78,11 @@ export async function listPhotos(access: PhotoAccess, cursor?: string) {
       if (!anchor) throw new AuthError(400, "Обновите галерею: страница больше недоступна.");
       continuation = { OR: [{ createdAt: { lt: anchor.createdAt } }, { createdAt: anchor.createdAt, id: { lt: anchor.id } }] };
     }
-    const photos = await tx.photo.findMany({ where: { ...where, ...continuation }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 41 });
+    const photos = await tx.photo.findMany({ where: { ...where, ...continuation }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 41,
+      include: { _count: { select: { likes: true } }, likes: { where: { voterHash: voter ?? "" }, select: { photoId: true } } },
+    });
     const page = photos.slice(0, 40);
-    return { photos: page.map(photo => photoDTO(photo, { ...access, event })), nextCursor: photos.length > 40 ? page[page.length - 1].id : null };
+    return { photos: page.map(photo => photoDTO(photo, { ...access, event }, { likeCount: photo._count.likes, liked: photo.likes.length > 0 })), nextCursor: photos.length > 40 ? page[page.length - 1].id : null };
   });
 }
 
@@ -186,7 +191,7 @@ export async function uploadPhoto(request: Request, access: PhotoAccess) {
       if (!photo || photo.status !== "PROCESSING" || !photo.uploadExpiresAt || photo.uploadExpiresAt <= new Date()) throw new AuthError(409, "Время загрузки истекло. Повторите попытку.");
       const status = access.actor.kind === "guest" && event.moderateUploads ? "PENDING" : "PUBLISHED";
       const finalized = await tx.photo.update({ where: { id }, data: { status, reservedBytes: 0n, uploadExpiresAt: null } });
-      await tx.event.update({ where: { id: event.id }, data: { reservedBytes: { decrement: totalBytes }, usedStorageBytes: { increment: totalBytes } } });
+      await tx.event.update({ where: { id: event.id }, data: { reservedBytes: { decrement: totalBytes }, usedStorageBytes: { increment: totalBytes }, ...(status === "PUBLISHED" ? { mediaVersion: { increment: 1 } } : {}) } });
       return photoDTO(finalized, { ...access, event });
     });
   } catch (error) {
@@ -213,6 +218,9 @@ export async function moderatePhotos(input: unknown, access: PhotoAccess) {
     const photos = await tx.photo.findMany({ where: { id: { in: ids }, eventId: event.id, status: { in: action === "delete" ? [...readyStatuses, "DELETING"] : [...readyStatuses] } } });
     if (photos.length !== ids.length) throw new AuthError(404, "Одна из фотографий недоступна. Обновите галерею.");
     await tx.photo.updateMany({ where: { id: { in: ids }, eventId: event.id }, data: { status: action === "publish" ? "PUBLISHED" : action === "hide" ? "HIDDEN" : "DELETING" } });
+    if (photos.some(photo => action === "publish" ? photo.status !== "PUBLISHED" : photo.status === "PUBLISHED")) {
+      await tx.event.update({ where: { id: event.id }, data: { mediaVersion: { increment: 1 } } });
+    }
     return photos;
   });
   if (action === "delete") {

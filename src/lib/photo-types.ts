@@ -8,4 +8,6 @@ export type PhotoDTO = {
   createdAt: string;
   thumbnailUrl: string;
   downloadUrl: string | null;
+  likeCount: number;
+  liked: boolean;
 };

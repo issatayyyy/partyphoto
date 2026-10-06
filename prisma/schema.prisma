@@ -62,6 +62,7 @@ model Event {
   deletedAt           DateTime?
   passwordHash        String?
   accessVersion       Int           @default(1)
+  mediaVersion        Int           @default(1)
   allowGuestUploads   Boolean       @default(false)
   moderateUploads     Boolean       @default(true)
   allowDownloads      Boolean       @default(true)
@@ -108,10 +109,18 @@ model Photo {
   status          PhotoStatus @default(UPLOADING)
   uploadExpiresAt DateTime?
   downloadCount   BigInt      @default(0)
+  likes           PhotoLike[]
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   @@index([eventId, status, createdAt, id])
   @@index([status, uploadExpiresAt])
+}
+model PhotoLike {
+  photoId   String
+  voterHash String
+  photo     Photo    @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@id([photoId, voterHash])
 }
 model Session {
   id        String   @id @default(cuid())
@@ -146,10 +155,16 @@ model MediaJob {
   attempts    Int       @default(0)
   availableAt DateTime  @default(now())
   lockedUntil DateTime?
+  lockToken   String?
+  expiresAt   DateTime?
+  totalPhotos Int       @default(0)
+  processedPhotos Int   @default(0)
+  sizeBytes   BigInt    @default(0)
   lastError   String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   @@index([status, availableAt])
+  @@index([kind, expiresAt])
 }
 
 // Fixed-window counters are shared by all application processes.

@@ -19,7 +19,7 @@ export function storage() {
     endpoint: required("S3_ENDPOINT"), region: required("S3_REGION"),
     forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
     credentials: { accessKeyId: required("S3_ACCESS_KEY_ID"), secretAccessKey: required("S3_SECRET_ACCESS_KEY") },
-    requestHandler: { connectionTimeout: 5000, requestTimeout: 60000, throwOnRequestTimeout: true },
+    requestHandler: { connectionTimeout: 5000, requestTimeout: 60000, socketTimeout: 60000, throwOnRequestTimeout: true },
   });
   return client;
 }

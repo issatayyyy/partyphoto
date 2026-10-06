@@ -18,7 +18,7 @@ export default async function AlbumPage({ params }: { params: Promise<{ slug: st
         {album.event?.startsAt && <p>Дата мероприятия: <EventDate value={album.event.startsAt}/></p>}
       </>}
     </section>
-    {!album.locked && album.event && <PhotoGallery slug={album.slug} maxUploadMb={album.event.maxUploadMb} allowUploads={album.event.allowGuestUploads} />}
+    {!album.locked && album.event && <PhotoGallery slug={album.slug} maxUploadMb={album.event.maxUploadMb} allowUploads={album.event.allowGuestUploads} allowDownloads={album.event.allowDownloads} />}
     <footer>PartyPhoto <span>Собираем моменты вместе.</span></footer>
   </main>;
 }
