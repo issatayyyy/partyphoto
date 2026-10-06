@@ -12,7 +12,8 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "test:auth": "node --env-file=.env --test tests/auth.integration.test.mjs",
-    "test:ui": "node --env-file=.env node_modules/@playwright/test/cli.js test"
+    "test:ui": "node --env-file=.env node_modules/@playwright/test/cli.js test",
+    "test:events": "node --env-file=.env --test tests/events.integration.test.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",
@@ -20,6 +21,7 @@
     "@prisma/client": "6.19.0",
     "argon2": "^0.45.1",
     "next": "16.3.8",
+    "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "server-only": "^0.0.1",
@@ -29,6 +31,7 @@
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@types/node": "^22.0.0",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "prisma": "6.19.0",

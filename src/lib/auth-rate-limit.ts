@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { db } from "./db";
 import { AuthError } from "./auth-http";
 
-async function consume(key: string, limit: number, seconds: number) {
+export async function consumeRateLimit(key: string, limit: number, seconds: number) {
   const [row] = await db.$queryRaw<{ attempts: number; resetAt: Date }[]>`
     INSERT INTO "AuthRateLimit" ("key", "attempts", "resetAt")
     VALUES (${key}, 1, CURRENT_TIMESTAMP + ${seconds} * INTERVAL '1 second')
@@ -24,10 +24,10 @@ async function consume(key: string, limit: number, seconds: number) {
 export async function limitAuthAttempt(action: "login" | "register", email: string) {
   // A shared cap protects hashing across app instances. Account keys are hashed;
   // untrusted X-Forwarded-For is deliberately not used as an identity.
-  await consume("auth:global", 120, 60);
-  if (action === "register") await consume("auth:registration", 60, 3600);
+  await consumeRateLimit("auth:global", 120, 60);
+  if (action === "register") await consumeRateLimit("auth:registration", 60, 3600);
   const subject = createHash("sha256").update(email).digest("hex");
-  await consume(`auth:${action}:${subject}`, action === "login" ? 10 : 5, action === "login" ? 900 : 3600);
+  await consumeRateLimit(`auth:${action}:${subject}`, action === "login" ? 10 : 5, action === "login" ? 900 : 3600);
   // Bound retention without deleting currently active counters.
   await db.authRateLimit.deleteMany({ where: { resetAt: { lt: new Date(Date.now() - 86400000) } } });
 }
