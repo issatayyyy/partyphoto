@@ -2,8 +2,7 @@ FROM node:22-bookworm-slim AS build
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
 COPY package*.json ./
-# Switch to npm ci once the first verified package-lock.json is committed.
-RUN npm install
+RUN npm ci
 COPY . .
 RUN npm run build
 

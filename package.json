@@ -1,19 +1,40 @@
 {
-  "name": "partyphoto", "version": "0.1.0", "private": true,
+  "name": "partyphoto",
+  "version": "0.1.0",
+  "private": true,
   "scripts": {
-    "dev": "next dev --hostname 0.0.0.0", "build": "prisma generate && next build",
-    "start": "next start", "typecheck": "tsc --noEmit",
-    "db:generate": "prisma generate", "db:validate": "prisma validate",
-    "db:migrate": "prisma migrate dev", "db:deploy": "prisma migrate deploy"
+    "dev": "next dev --hostname 0.0.0.0",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "prisma generate",
+    "db:validate": "prisma validate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "test:auth": "node --env-file=.env --test tests/auth.integration.test.mjs",
+    "test:ui": "node --env-file=.env node_modules/@playwright/test/cli.js test"
   },
   "dependencies": {
-    "next": "16.3.8", "react": "^19.2.0", "react-dom": "^19.2.0",
-    "@prisma/client": "6.19.0", "@aws-sdk/client-s3": "^3.0.0",
-    "@aws-sdk/s3-request-presigner": "^3.0.0", "sharp": "^0.34.0", "zod": "^4.0.0"
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/s3-request-presigner": "^3.0.0",
+    "@prisma/client": "6.19.0",
+    "argon2": "^0.45.1",
+    "next": "16.3.8",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "server-only": "^0.0.1",
+    "sharp": "^0.35.5",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
-    "prisma": "6.19.0", "typescript": "^5.9.0",
-    "@types/node": "^22.0.0", "@types/react": "^19.0.0", "@types/react-dom": "^19.0.0"
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "prisma": "6.19.0",
+    "typescript": "^5.9.0"
   },
-  "engines": { "node": ">=22.12.0 <23" }
+  "engines": {
+    "node": ">=22.12.0 <23"
+  }
 }

@@ -150,3 +150,11 @@ model MediaJob {
   updatedAt   DateTime  @updatedAt
   @@index([status, availableAt])
 }
+
+// Fixed-window counters are shared by all application processes.
+model AuthRateLimit {
+  key      String   @id
+  attempts Int      @default(0)
+  resetAt  DateTime @db.Timestamptz(3)
+  @@index([resetAt])
+}
