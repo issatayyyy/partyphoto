@@ -11,7 +11,6 @@ services:
     buildCommand: npm ci --include=dev && npm run build && npm run demo:prepare
     startCommand: npm run demo:start
     healthCheckPath: /api/health/ready
-    maxShutdownDelaySeconds: 30
     envVars:
       - key: NODE_VERSION
         value: "22"
