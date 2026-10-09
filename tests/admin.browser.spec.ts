@@ -146,6 +146,7 @@ test("superadmin manages isolated users and searches events on mobile", async ({
       await organizerContext.addCookies([{ name: "partyphoto_session", value: restoredToken, url: baseURL!, httpOnly: true, sameSite: "Lax" }]);
       await organizerPage.goto(new URL("/dashboard", baseURL).href);
       await expect(organizerPage).toHaveURL(/\/dashboard$/);
+      await organizerPage.locator("summary").filter({ hasText: "Мой аккаунт" }).click();
       await expect(organizerPage.getByText("Фотограф", { exact: true })).toBeVisible();
     });
 

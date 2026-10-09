@@ -487,7 +487,8 @@ for cloud use.
 1. An organizer creates an event. The server generates a unique eight-character
    code, slug, and `/e/[slug]` link. The QR endpoint encodes this link as a 512×512 PNG;
    the QR code contains no password and is not stored in S3.
-2. An organizer or guest selects JPEG, PNG, or WebP files. The bulk upload UI sends
+2. An organizer or guest selects JPEG, PNG, or WebP files, or takes a photo using
+   the embedded camera. The bulk upload UI sends
    up to 20 selected files in sequential requests; each POST contains one file.
    Guest requests check upload permission, the password/token, and access expiry.
 3. The server checks permissions, rate limits, size, the actual image format,
@@ -519,6 +520,23 @@ The result is reused for up to an hour while the access and media versions match
 album changes invalidate an outdated archive. The media worker also retries deletions
 and cleans up expired `PROCESSING` uploads, `DELETING` photos, ZIP archives,
 and view deduplication records.
+
+### Embedded camera
+
+When uploads are allowed, **Take a photo** (`Сделать фото`) opens an in-page camera
+with a live view, front/back camera switching, a snapshot preview, and a retake
+option. **Upload to album** (`Загрузить в альбом`) sends the captured JPEG through
+the same upload API as selected files, with the same access checks and quotas.
+Nothing is uploaded until that button is pressed. A failed upload keeps the
+snapshot available for retry.
+
+Camera access requires browser permission and HTTPS (or `localhost` for local
+development). Opening the dev server through a plain HTTP LAN address on a phone
+does not provide camera access. If permission is denied or the camera is unavailable,
+the user can select a photo from their device instead. The microphone is never
+requested. Camera tracks stop after capture, on close, when leaving the page, or
+when the page goes into the background; a backgrounded live view must be resumed
+explicitly. [Browser camera requirements](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia).
 
 ### Limits and statistics
 
@@ -781,6 +799,13 @@ To test only theme switching:
 
 ```bash
 npm run test:ui -- tests/theme.browser.spec.ts
+```
+
+Camera tests use Chromium's simulated video device, so they do not access a real
+webcam. With the local dev server, PostgreSQL, and S3 running:
+
+```bash
+npm run test:ui -- tests/camera.browser.spec.ts tests/media.browser.spec.ts
 ```
 
 The production demo runtime test uses a separate, randomly named

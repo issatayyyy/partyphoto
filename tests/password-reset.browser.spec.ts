@@ -88,6 +88,7 @@ test("mobile password reset removes the fragment, revokes sessions and preserves
       await page.getByLabel("Пароль", { exact: true }).fill(newPassword);
       await page.getByRole("button", { name: "Войти", exact: true }).click();
       await expect(page).toHaveURL(/\/dashboard$/);
+      await page.locator("summary").filter({ hasText: "Мой аккаунт" }).click();
       await expect(page.getByText("Администратор", { exact: true })).toBeVisible();
     });
 

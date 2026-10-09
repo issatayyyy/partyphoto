@@ -20,12 +20,7 @@ export default async function RegisterPage() {
         </nav>
       </header>
       <section className="auth-shell" aria-labelledby="auth-title">
-        <div className="auth-intro">
-          <p className="eyebrow">ВАШИ СОБЫТИЯ. ВАШИ ВОСПОМИНАНИЯ.</p>
-          <h1 id="auth-title">Хорошие моменты<br /><em>заслуживают места.</em></h1>
-          <p className="intro">Создайте аккаунт организатора — первый шаг к общему фотоальбому вашего мероприятия.</p>
-          <div className="auth-aside"><span aria-hidden="true">↗</span><p>Собирайте людей. Сохраняйте то, что вас объединяет.</p></div>
-        </div>
+        <div className="auth-intro"><h1 id="auth-title">Начнём с вашего события.</h1></div>
         <AuthForm mode="register" />
       </section>
       <footer>PartyPhoto <span>Собираем моменты вместе.</span></footer>

@@ -27,6 +27,7 @@ test("registration, dashboard, logout and login work on mobile", async ({ page }
     await page.getByRole("button", { name: "Создать аккаунт" }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
     await expect(page.getByRole("heading", { name: /Добро пожаловать/ })).toBeVisible();
+    await page.locator("summary").filter({ hasText: "Мой аккаунт" }).click();
     await expect(page.getByText(email, { exact: true })).toBeVisible();
     await expect(page.getByText("Организатор", { exact: true })).toBeVisible();
     await page.reload();

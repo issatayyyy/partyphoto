@@ -20,12 +20,7 @@ export default async function LoginPage() {
         </nav>
       </header>
       <section className="auth-shell" aria-labelledby="auth-title">
-        <div className="auth-intro">
-          <p className="eyebrow">ДЛЯ ТЕХ, КТО СОБИРАЕТ МОМЕНТЫ</p>
-          <h1 id="auth-title">С возвращением.<br /><em>Всё начинается с вас.</em></h1>
-          <p className="intro">Войдите в личный кабинет PartyPhoto, чтобы продолжить работу с сервисом.</p>
-          <div className="auth-aside"><span aria-hidden="true">↗</span><p>Один аккаунт. Все ваши будущие события.</p></div>
-        </div>
+        <div className="auth-intro"><h1 id="auth-title">С возвращением.</h1></div>
         <AuthForm mode="login" />
       </section>
       <footer>PartyPhoto <span>Собираем моменты вместе.</span></footer>
