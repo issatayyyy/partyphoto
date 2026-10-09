@@ -1,3 +1,4 @@
+import { ThemeToggle } from "@/components/theme-toggle";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -13,7 +14,7 @@ export default async function LoginPage() {
     <main className="auth-page">
       <header>
         <Link className="brand" href="/">partyphoto<span>●</span></Link>
-        <nav className="header-nav" aria-label="Навигация">
+        <nav className="header-nav" aria-label="Навигация"><ThemeToggle />
           <Link className="header-link" href="/">На главную</Link>
           <Link className="button button-outline" href="/register">Создать аккаунт</Link>
         </nav>

@@ -1,3 +1,4 @@
+import { ThemeToggle } from "@/components/theme-toggle";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getGuestAlbum } from "@/lib/albums";
@@ -11,7 +12,7 @@ export default async function AlbumPage({ params }: { params: Promise<{ slug: st
   const album = await getGuestAlbum((await params).slug);
   if (!album) notFound();
   return <main className="dashboard-page">
-    <header><Link className="brand" href="/">partyphoto<span>●</span></Link><Link className="header-link" href="/join">Другой альбом</Link></header>
+    <header><Link className="brand" href="/">partyphoto<span>●</span></Link><nav className="header-nav" aria-label="Навигация"><ThemeToggle /><Link className="header-link" href="/join">Другой альбом</Link></nav></header>
     <section className="dashboard-heading"><p className="eyebrow">АЛЬБОМ МЕРОПРИЯТИЯ</p><h1>{album.title}</h1>
       {album.locked ? <div className="auth-card" style={{maxWidth: 480}}><h2>Альбом защищён паролем</h2><p>Введите пароль от организатора.</p><AlbumAccess slug={album.slug}/></div> : <>
         {album.event?.description && <p className="intro" style={{whiteSpace: "pre-wrap"}}>{album.event.description}</p>}

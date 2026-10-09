@@ -1,3 +1,4 @@
+import { ThemeToggle } from "@/components/theme-toggle";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -26,7 +27,7 @@ export default async function AdminPage() {
     <main className="dashboard-page admin-page">
       <header>
         <Link className="brand" href="/">partyphoto<span>●</span></Link>
-        <nav className="header-nav" aria-label="Навигация">
+        <nav className="header-nav" aria-label="Навигация"><ThemeToggle />
           <Link className="header-link" href="/dashboard">Личный кабинет</Link>
           <LogoutButton />
         </nav>

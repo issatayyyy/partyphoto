@@ -1,10 +1,11 @@
+import { ThemeToggle } from "@/components/theme-toggle";
 import Link from "next/link";
 
 export default function Home() {
   return <main>
     <header>
       <Link className="brand" href="/">partyphoto<span>●</span></Link>
-      <nav className="header-nav" aria-label="Навигация">
+      <nav className="header-nav" aria-label="Навигация"><ThemeToggle />
         <Link className="header-link" href="/login">Войти</Link>
         <Link className="button button-outline" href="/register">Создать аккаунт</Link>
       </nav>

@@ -1,3 +1,4 @@
+import { ThemeToggle } from "@/components/theme-toggle";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -26,7 +27,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
 
   return (
     <main className="dashboard-page">
-      <header><Link className="brand" href="/">partyphoto<span>●</span></Link><nav className="header-nav" aria-label="Навигация"><Link className="header-link" href="/dashboard">Личный кабинет</Link><LogoutButton /></nav></header>
+      <header><Link className="brand" href="/">partyphoto<span>●</span></Link><nav className="header-nav" aria-label="Навигация"><ThemeToggle /><Link className="header-link" href="/dashboard">Личный кабинет</Link><LogoutButton /></nav></header>
       <section className="event-page-heading" aria-labelledby="event-title"><Link className="back-link" href="/dashboard">← Все мероприятия</Link><p className="eyebrow">{event.canManage ? "УПРАВЛЕНИЕ МЕРОПРИЯТИЕМ" : "ВАШЕ МЕРОПРИЯТИЕ"}</p><h1 id="event-title">{event.title}</h1><div className="event-heading-tags"><span className="status-pill">{event.hasPassword ? "С паролем" : "Доступ по ссылке"}</span>{event.expiresAt && <span className="event-expiry">До <EventDate value={event.expiresAt}/></span>}</div></section>
       <section className="event-statistics" aria-label="Статистика мероприятия"><div><span>Фотографии</span><strong>{event.photoCount.toLocaleString("ru-RU")}</strong><small>из {event.maxPhotos.toLocaleString("ru-RU")}</small></div><div><span>Просмотры</span><strong>{BigInt(event.viewCount).toLocaleString("ru-RU")}</strong><small>Один браузер — один просмотр за 24 часа.</small></div><div><span>Скачивания</span><strong>{BigInt(event.downloadCount).toLocaleString("ru-RU")}</strong></div><div><span>Занято места</span><strong>{formatBytes(event.usedStorageBytes)}</strong><small>из {event.maxStorageMb.toLocaleString("ru-RU")} МБ</small></div></section>
       <PhotoGallery eventId={event.id} maxUploadMb={effectiveUploadBytes(event.maxUploadMb * 1048576) / 1048576} />
