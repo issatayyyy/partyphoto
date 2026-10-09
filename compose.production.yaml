@@ -9,9 +9,13 @@ services:
     depends_on: !override
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
   worker:
     environment:
       S3_ENDPOINT: ${S3_ENDPOINT:?Set production S3 endpoint}
     depends_on: !override
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
