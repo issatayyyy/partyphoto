@@ -1,75 +1,75 @@
 # PartyPhoto
 
-PartyPhoto — сервис для обмена фотографиями с мероприятий: организатор создаёт
-альбом, а гости открывают его по коду, ссылке или QR-коду, смотрят фотографии,
-ставят лайки, скачивают оригиналы и ZIP-архивы. Если организатор разрешил загрузку,
-гости добавляют свои фотографии без регистрации и предварительного одобрения.
+PartyPhoto is a service for sharing event photos: an organizer creates
+an album, and guests open it using a code, a link, or a QR code to view photos,
+like them, and download originals and ZIP archives. If the organizer allows uploads,
+guests can add their own photos without registering or waiting for approval.
 
-**Учебное демо:** [partyphoto-demo.onrender.com](https://partyphoto-demo.onrender.com).
-Размещение: Render Free для приложения и фонового обработчика, Supabase для
-PostgreSQL и приватного S3-хранилища. После простоя первый запрос может быть медленным.
+**Course demo:** [partyphoto-demo.onrender.com](https://partyphoto-demo.onrender.com).
+Hosting: Render Free for the application and media worker, Supabase for
+PostgreSQL and private S3 storage. The first request after an idle period may be slow.
 
-Реализованы личный кабинет, роли организатора/фотографа/суперадминистратора,
-пароли и сроки доступа к альбомам, лимиты загрузки, массовая модерация,
-статистика, восстановление пароля через Brevo и переключение светлой/тёмной темы.
-Тема по умолчанию следует настройкам устройства; ручной выбор сохраняется
-в браузере и синхронизируется между вкладками.
+Implemented features include a dashboard, organizer/photographer/superadmin roles,
+album passwords and access expiry, upload limits, bulk moderation,
+statistics, password recovery through Brevo, and a light/dark theme switch.
+The default theme follows the device settings; a manual choice is saved
+in the browser and synchronized across tabs.
 
-Описание ниже сверено с кодом на **10 октября 2026 года**, версия приложения `0.1.0`.
+The description below was checked against the code on **October 10, 2026**, application version `0.1.0`.
 
-## Содержание
+## Contents
 
-- [Стек технологий](#stack)
-- [Требования к окружению](#requirements)
-- [Переменные окружения](#environment)
-- [Локальный запуск и первый суперадмин](#local)
-- [Архитектура, данные и маршруты](#architecture)
-- [Авторизация и права](#auth)
-- [Загрузка фотографий, QR и фоновые задачи](#media)
-- [Сборка и деплой на Render](#render)
-- [Проверки и тесты](#tests)
-- [Диагностика и ограничения](#troubleshooting)
-- [Дополнительная документация](#docs)
+- [Technology stack](#stack)
+- [Environment requirements](#requirements)
+- [Environment variables](#environment)
+- [Local setup and the first superadmin](#local)
+- [Architecture, data, and routes](#architecture)
+- [Authentication and permissions](#auth)
+- [Photo uploads, QR codes, and background jobs](#media)
+- [Building and deploying on Render](#render)
+- [Checks and tests](#tests)
+- [Troubleshooting and limitations](#troubleshooting)
+- [Further documentation](#docs)
 
 <a id="stack"></a>
-## Стек технологий
+## Technology stack
 
-| Слой | Реализация |
+| Layer | Implementation |
 | --- | --- |
-| Приложение | **Next.js 16.3.8**, App Router; React 19.3.0 по `package-lock.json` |
-| Язык | TypeScript 5.9.3 по lock-файлу; служебные Node.js-скрипты в `.mjs` |
-| UI | React-компоненты и обычный CSS в `src/app/globals.css`; **Tailwind не подключён** |
-| Backend | Server Components и Route Handlers `src/app/api/**/route.ts`, Node.js runtime; отдельного Express/Nest-сервера нет |
-| База данных | PostgreSQL; локальный образ `postgres:17-alpine`, в демо — Supabase PostgreSQL |
-| ORM и миграции | Prisma Client и Prisma CLI **6.19.0**, SQL-миграции в `prisma/migrations/` |
-| Файлы | AWS SDK v3, приватное S3-совместимое хранилище; локально SeaweedFS **4.48**, в демо Supabase Storage S3 API |
-| Превью и архивы | Sharp, WebP; `yazl` и multipart upload для ZIP; отдельный Node.js media worker |
-| QR-коды | `qrcode`, PNG генерируется сервером по запросу |
-| Auth | Собственная сессионная авторизация: Argon2id, случайные токены, SHA-256 хеши токенов в PostgreSQL, HttpOnly cookies |
-| Почта | Brevo HTTPS API для одноразовых ссылок восстановления пароля |
-| Валидация и тесты | Zod, TypeScript, Node.js test runner, Playwright с Google Chrome |
-| Развёртывание | Render Blueprint; дополнительно Docker/Compose, Nginx и конфигурация TLS для собственного сервера |
+| Application | **Next.js 16.3.8**, App Router; React 19.3.0 as specified in `package-lock.json` |
+| Language | TypeScript 5.9.3 as specified in the lock file; utility Node.js scripts in `.mjs` |
+| UI | React components and plain CSS in `src/app/globals.css`; **Tailwind is not included** |
+| Backend | Server Components and Route Handlers in `src/app/api/**/route.ts`, Node.js runtime; no separate Express/Nest server |
+| Database | PostgreSQL; local image `postgres:17-alpine`, Supabase PostgreSQL in the demo |
+| ORM and migrations | Prisma Client and Prisma CLI **6.19.0**, SQL migrations in `prisma/migrations/` |
+| Files | AWS SDK v3, private S3-compatible storage; SeaweedFS **4.48** locally, Supabase Storage S3 API in the demo |
+| Previews and archives | Sharp, WebP; `yazl` and multipart upload for ZIP; a separate Node.js media worker |
+| QR codes | `qrcode`, PNG generated by the server on request |
+| Auth | Custom session-based authentication: Argon2id, random tokens, SHA-256 token hashes in PostgreSQL, HttpOnly cookies |
+| Email | Brevo HTTPS API for single-use password recovery links |
+| Validation and tests | Zod, TypeScript, Node.js test runner, Playwright with Google Chrome |
+| Deployment | Render Blueprint; also Docker/Compose, Nginx, and TLS configuration for a self-hosted server |
 
-Supabase используется для БД и файлов. Supabase Auth, NextAuth, JWT, SQLite и Redis
-в текущей реализации не используются. Другие S3-провайдеры можно подключать через
-переменные окружения; конкретный endpoint и права bucket нужно проверять отдельно.
-Версии зависимостей воспроизводятся через [package-lock.json](package-lock.json).
+Supabase is used for the database and files. Supabase Auth, NextAuth, JWT, SQLite, and Redis
+are not used in the current implementation. Other S3 providers can be configured through
+environment variables; their specific endpoint and bucket permissions must be checked separately.
+Dependency versions are locked in [package-lock.json](package-lock.json).
 
 <a id="requirements"></a>
-## Требования к окружению
+## Environment requirements
 
-- **Node.js `>=22.12.0 <23`** — диапазон из `package.json`.
-- **npm**, поставляемый с Node.js 22. В репозитории поддерживается установка через
-  `npm ci`; lock-файлов pnpm/yarn нет. Отдельная версия npm не закреплена.
-- Git; Docker Engine и **Docker Compose 2.24.4+** для локального PostgreSQL и,
-  при необходимости, S3. Эта версия Compose также поддерживает `!override`
-  в конфигурации собственного production-развёртывания.
-- Для запуска SeaweedFS без контейнера: **Linux amd64**, `curl`, `tar`, `sha256sum`.
-  Для другой архитектуры или ОС используйте контейнерный вариант хранилища.
-- Для браузерных тестов — установленный **Google Chrome**: Playwright настроен
-  на `channel: "chrome"`.
+- **Node.js `>=22.12.0 <23`** — the range specified in `package.json`.
+- **npm**, bundled with Node.js 22. The repository supports installation through
+  `npm ci`; there are no pnpm/yarn lock files. A separate npm version is not pinned.
+- Git; Docker Engine and **Docker Compose 2.24.4+** for local PostgreSQL and,
+  optionally, S3. This Compose version also supports `!override`
+  in the self-hosted production deployment configuration.
+- To run SeaweedFS without a container: **Linux amd64**, `curl`, `tar`, `sha256sum`.
+  For another architecture or operating system, use the containerized storage option.
+- For browser tests, an installed **Google Chrome**: Playwright is configured
+  with `channel: "chrome"`.
 
-Проверка инструментов:
+Check the tools:
 
 ```bash
 node --version
@@ -78,98 +78,98 @@ docker compose version
 ```
 
 <a id="environment"></a>
-## Переменные окружения
+## Environment variables
 
-Шаблон: [.env.example](.env.example). Создайте локальный файл один раз:
+Template: [.env.example](.env.example). Create the local file once:
 
 ```bash
 cp -n .env.example .env
 ```
 
-`cp -n` сохраняет существующий `.env`. Настройте значения в редакторе.
-Next.js читает стандартные `.env*`; большинство CLI-команд проекта явно загружают
-`.env` через `node --env-file=.env`. Чтобы сайт и скрипты работали с одной БД,
-используйте один `.env` для локального окружения и учитывайте более приоритетные
-`.env.local` и уже экспортированные переменные терминала.
+`cp -n` preserves an existing `.env`. Configure the values in an editor.
+Next.js reads the standard `.env*` files; most project CLI commands explicitly load
+`.env` through `node --env-file=.env`. To ensure the website and scripts use the same database,
+use one `.env` for the local environment and account for the higher priority of
+`.env.local` and variables already exported in the terminal.
 
-`.env.demo` — отдельный необязательный файл оператора для облачных команд.
-Он не создаётся копированием репозитория и не загружается автоматически.
-`.env`, `.env.demo`, `.env.local` и `.data/` исключены из Git; секреты нельзя
-помещать в README, исходники, публичные переменные или скриншоты.
+`.env.demo` is a separate, optional operator file for cloud commands.
+It is not created by copying the repository and is not loaded automatically.
+`.env`, `.env.demo`, `.env.local`, and `.data/` are excluded from Git; secrets must not
+be placed in the README, source code, public variables, or screenshots.
 
-### Приложение и хранилище
+### Application and storage
 
-| Переменная | Обязательность / значение | Назначение |
+| Variable | Requirement / value | Purpose |
 | --- | --- | --- |
-| `APP_URL` | Обязательна; локально `http://localhost:3000` | Точный публичный origin: схема, хост и порт. Проверка Origin, ссылки на альбомы, QR и восстановление пароля. В production требуется HTTPS. На Render `demo:start` умеет вычислить её автоматически — см. ниже. |
-| `DATABASE_URL` | Обязательна | PostgreSQL connection string для Prisma, миграций, CLI и worker. Локальный пример использует `schema=public`, Render demo требует `schema=partyphoto`. |
-| `S3_ENDPOINT` | Обязательна приложению и worker | Endpoint S3. Локально `http://localhost:9000`; у Supabase включает `/storage/v1/s3`. |
-| `S3_REGION` | Обязательна приложению и worker | Регион провайдера. Для локального SeaweedFS — `us-east-1`. |
-| `S3_BUCKET` | Обязательна | Имя приватного bucket, в примерах и Blueprint — `partyphoto`. |
-| `S3_ACCESS_KEY_ID` | Обязательна | Серверный идентификатор ключа S3. |
-| `S3_SECRET_ACCESS_KEY` | Обязательна | Серверный секрет S3. |
-| `S3_FORCE_PATH_STYLE` | По коду `false`; шаблон и Render задают `true` | Path-style адресация S3. Включается только строкой `true`. |
-| `MAX_UPLOAD_BYTES` | По умолчанию `26214400` — 25 МиБ | Общий предел одного загружаемого файла. Итоговый предел — минимум этого значения, лимита альбома и ограничения demo mode. |
-| `MAX_ZIP_BYTES` | По умолчанию `1073741824` — 1 ГиБ | Максимальная сумма размеров оригиналов в ZIP; сам архив имеет дополнительный служебный объём. |
-| `MAX_ZIP_PHOTOS` | По умолчанию `10000`, диапазон 1–10000 | Максимальное количество фотографий в одном ZIP. |
-| `PARTYPHOTO_DEMO_MODE` | Необязательна, выключена | При `true`: до 3 МиБ и 6 Мп на изображение, одна одновременная загрузка и две одновременные операции хеширования паролей на процесс. ZIP-лимиты задаются отдельно. |
+| `APP_URL` | Required; locally `http://localhost:3000` | The exact public origin: scheme, host, and port. Used for Origin checks, album links, QR codes, and password recovery. HTTPS is required in production. On Render, `demo:start` can derive it automatically — see below. |
+| `DATABASE_URL` | Required | PostgreSQL connection string for Prisma, migrations, CLI, and media worker. The local example uses `schema=public`; the Render demo requires `schema=partyphoto`. |
+| `S3_ENDPOINT` | Required by the application and media worker | S3 endpoint. Locally `http://localhost:9000`; on Supabase it includes `/storage/v1/s3`. |
+| `S3_REGION` | Required by the application and media worker | Provider region. For local SeaweedFS: `us-east-1`. |
+| `S3_BUCKET` | Required | Name of the private bucket: `partyphoto` in the examples and Blueprint. |
+| `S3_ACCESS_KEY_ID` | Required | Server-side S3 access key identifier. |
+| `S3_SECRET_ACCESS_KEY` | Required | Server-side S3 secret key. |
+| `S3_FORCE_PATH_STYLE` | `false` in the code; the template and Render set `true` | Path-style S3 addressing. Enabled only by the string `true`. |
+| `MAX_UPLOAD_BYTES` | Default `26214400` — 25 MiB | Overall limit for a single uploaded file. The effective limit is the minimum of this value, the album limit, and the demo mode restriction. |
+| `MAX_ZIP_BYTES` | Default `1073741824` — 1 GiB | Maximum combined size of originals in a ZIP; the archive itself adds overhead. |
+| `MAX_ZIP_PHOTOS` | Default `10000`, range 1–10000 | Maximum number of photos in one ZIP. |
+| `PARTYPHOTO_DEMO_MODE` | Optional, disabled | When `true`: up to 3 MiB and 6 MP per image, one concurrent upload and two concurrent password hashing operations per process. ZIP limits are configured separately. |
 
-### Почта
+### Email
 
-| Переменная | Обязательность / значение | Назначение |
+| Variable | Requirement / value | Purpose |
 | --- | --- | --- |
-| `BREVO_API_KEY` | Нужна для email-восстановления | Ключ **HTTPS API**, не SMTP key. |
-| `MAIL_FROM_EMAIL` | Нужна для email-восстановления | Адрес отправителя, подтверждённый в Brevo. |
-| `MAIL_FROM_NAME` | Необязательна, `PartyPhoto` | Имя отправителя, до 80 символов. |
+| `BREVO_API_KEY` | Required for email password recovery | An **HTTPS API** key, not an SMTP key. |
+| `MAIL_FROM_EMAIL` | Required for email password recovery | Sender address verified in Brevo. |
+| `MAIL_FROM_NAME` | Optional, `PartyPhoto` | Sender name, up to 80 characters. |
 
-Без настроенной почты сайт и форма `/forgot-password` работают, но отправка формы
-через `POST /api/auth/forgot-password` возвращает общую ошибку сервиса (503).
-Создание ключа само по себе не подтверждает
-активацию отправки: настройте отправителя и проверьте письмо.
-Подробности — [docs/email.md](docs/email.md).
+Without configured email, the website and the `/forgot-password` form still work, but submitting the form
+through `POST /api/auth/forgot-password` returns a generic service error (503).
+Creating a key alone does not confirm
+that sending is enabled: configure the sender and verify that an email arrives.
+Details: [docs/email.md](docs/email.md).
 
-### Локальная инфраструктура
+### Local infrastructure
 
-| Переменная | Значение / назначение |
+| Variable | Value / purpose |
 | --- | --- |
-| `POSTGRES_USER` | Обязательна для Compose: пользователь локальной БД, пример `partyphoto`. |
-| `POSTGRES_PASSWORD` | Обязательна для Compose: пароль БД. Он должен совпадать с паролем в локальном `DATABASE_URL`. |
-| `POSTGRES_DB` | Обязательна для Compose: имя БД, пример `partyphoto`. |
-| `XDG_DATA_HOME` | Необязательный каталог для установки native SeaweedFS; по умолчанию `$HOME/.local/share`. |
-| `HOME` | Системный домашний каталог, используемый установщиком как fallback. Не нужно добавлять или менять его в `.env`. |
+| `POSTGRES_USER` | Required by Compose: local database user, e.g. `partyphoto`. |
+| `POSTGRES_PASSWORD` | Required by Compose: database password. It must match the password in the local `DATABASE_URL`. |
+| `POSTGRES_DB` | Required by Compose: database name, e.g. `partyphoto`. |
+| `XDG_DATA_HOME` | Optional directory for the native SeaweedFS installation; defaults to `$HOME/.local/share`. |
+| `HOME` | System home directory used by the installer as a fallback. Do not add or change it in `.env`. |
 
-`POSTGRES_*` и `DATABASE_URL` — самостоятельные настройки: изменение одной строки
-не переписывает остальные. Для URL пароль со специальными символами нужно
-percent-encode. Compose-конфигурация контейнерных `app`/`worker` собирает URL из
-`POSTGRES_*` без кодирования: для этого варианта используйте URL-safe пароль.
-Изменение `POSTGRES_PASSWORD` не меняет пароль уже инициализированной БД в volume.
-Локальные storage-скрипты имеют fallback endpoint/region, но приложение требует
-явно заполненные `S3_ENDPOINT` и `S3_REGION`.
+`POSTGRES_*` and `DATABASE_URL` are independent settings: changing one line
+does not rewrite the others. Passwords with special characters must be
+percent-encoded in URLs. The Compose configuration for containerized `app`/`worker` builds the URL from
+`POSTGRES_*` without encoding: use a URL-safe password for this option.
+Changing `POSTGRES_PASSWORD` does not change the password of a database already initialized in a volume.
+The local storage scripts have fallback endpoint/region values, but the application requires
+explicit `S3_ENDPOINT` and `S3_REGION` values.
 
-### Платформа и тесты
+### Platform and tests
 
-Это также используемые кодом/инфраструктурой переменные; большинство из них
-задаёт среда запуска, добавлять их все в `.env` не требуется.
+These variables are also used by the code/infrastructure; most are supplied
+by the runtime environment, so they do not all need to be added to `.env`.
 
-| Переменная | Значение / назначение |
+| Variable | Value / purpose |
 | --- | --- |
-| `NODE_ENV` | Dev-сервер работает в development; Docker, Render и demo supervisor — в production. Влияет на HTTPS, cookies и запрет тестового email endpoint. Не задавайте `production` для обычной локальной разработки. |
-| `PORT` | Порт веб-сервера. Render передаёт его сам; fallback `demo:start` — `10000`, Docker — `3000`. Для `next dev` порт можно передать аргументом `--port`. |
-| `HOSTNAME` | Адрес прослушивания, не публичный домен. Docker и `demo:start` задают `0.0.0.0`; `dev` передаёт его через CLI. |
-| `NODE_VERSION` | Настройка Render для выбора Node.js; в `render.yaml` указано `22`. |
-| `RENDER` | Переменная платформы. При `true` supervisor может вывести отсутствующий `APP_URL` из `RENDER_EXTERNAL_URL`. |
-| `RENDER_EXTERNAL_URL` | HTTPS-адрес сервиса от Render; используется как origin, только если `APP_URL` вообще не задан. |
-| `AUTH_TEST_URL` | Необязательный HTTP-адрес локального сервера для тестов вместо `APP_URL`; Playwright дополнительно имеет fallback `http://localhost:3000`. |
-| `EMAIL_TEST_API_URL` | Только development/test: подмена Brevo на локальный HTTP endpoint `http://127.0.0.1:3119/v3/smtp/email`. Разрешены `127.0.0.1`/`[::1]` и указанный путь, запрещены credentials/query/fragment. В production переменная запрещена. |
+| `NODE_ENV` | The dev server runs in development; Docker, Render, and the demo supervisor run in production. Controls HTTPS and cookie behavior, and whether the test email endpoint is allowed. Do not set `production` for normal local development. |
+| `PORT` | Web server port. Render supplies it automatically; the `demo:start` fallback is `10000`, Docker uses `3000`. For `next dev`, the port can be supplied with the `--port` argument. |
+| `HOSTNAME` | Listening address, not the public domain. Docker and `demo:start` set `0.0.0.0`; `dev` supplies it through the CLI. |
+| `NODE_VERSION` | Render setting for selecting Node.js; `render.yaml` specifies `22`. |
+| `RENDER` | Platform variable. When `true`, the supervisor can derive a missing `APP_URL` from `RENDER_EXTERNAL_URL`. |
+| `RENDER_EXTERNAL_URL` | HTTPS service URL supplied by Render; used as the origin only if `APP_URL` is not set at all. |
+| `AUTH_TEST_URL` | Optional local HTTP server address for tests instead of `APP_URL`; Playwright also has a `http://localhost:3000` fallback. |
+| `EMAIL_TEST_API_URL` | Development/test only: replaces Brevo with the local HTTP endpoint `http://127.0.0.1:3119/v3/smtp/email`. Allows `127.0.0.1`/`[::1]` and the specified path; credentials/query/fragment are prohibited. This variable is prohibited in production. |
 
-Это полный перечень явно используемых проектом переменных, включая служебные.
-`AUTH_SECRET`, `JWT_SECRET`, `SMTP_*`, `NEXT_PUBLIC_*` и ключи Supabase Auth
-для запуска текущего приложения не требуются.
+This is the complete list of variables explicitly used by the project, including utility variables.
+`AUTH_SECRET`, `JWT_SECRET`, `SMTP_*`, `NEXT_PUBLIC_*`, and Supabase Auth keys
+are not required to run the current application.
 
 <a id="local"></a>
-## Локальный запуск и первый суперадмин
+## Local setup and the first superadmin
 
-### 1. Получить код и зависимости
+### 1. Get the code and dependencies
 
 ```bash
 git clone https://github.com/issatayyyy/partyphoto.git
@@ -178,12 +178,12 @@ cp -n .env.example .env
 npm ci
 ```
 
-Если репозиторий уже существует, перейдите в его корень и не клонируйте повторно.
-Перед продолжением проверьте локальный `.env`: `APP_URL=http://localhost:3000`,
-БД на `localhost:5432`, S3 на `http://localhost:9000`; `POSTGRES_*` должны
-соответствовать `DATABASE_URL`.
+If the repository already exists, go to its root and do not clone it again.
+Before continuing, check the local `.env`: `APP_URL=http://localhost:3000`,
+the database at `localhost:5432`, S3 at `http://localhost:9000`; `POSTGRES_*` must
+match `DATABASE_URL`.
 
-### 2. Запустить PostgreSQL и применить миграции
+### 2. Start PostgreSQL and apply migrations
 
 ```bash
 docker compose up -d --wait db
@@ -192,431 +192,438 @@ npm run db:deploy
 npm run db:generate
 ```
 
-`--wait` дожидается healthcheck PostgreSQL перед миграциями.
-`db:deploy` применяет сохранённые SQL-миграции, а `db:generate` создаёт Prisma Client.
-Для обычного запуска используйте эти команды. При разработке **нового изменения
-схемы** после правки `prisma/schema.prisma` создавайте миграцию отдельно:
+`--wait` waits for the PostgreSQL healthcheck before migrations.
+`db:deploy` applies the saved SQL migrations, and `db:generate` generates Prisma Client.
+Use these commands for normal startup. When developing a **new schema
+change**, create a separate migration after editing `prisma/schema.prisma`:
 
 ```bash
 npm run db:migrate -- --name describe_change
 ```
 
-Не заменяйте версионные миграции `db push` или сбросом БД. Обычные `dev` и `start`
-миграции автоматически не запускают; у Render `demo:start` другой порядок.
+Do not replace versioned migrations with `db push` or a database reset. Normal `dev` and `start`
+do not run migrations automatically; Render's `demo:start` follows a different sequence.
 
-### 3. Запустить приватное S3-хранилище
+### 3. Start private S3 storage
 
-**Вариант A — native SeaweedFS на Linux amd64.** Установить один раз:
+**Option A — native SeaweedFS on Linux amd64.** Install once:
 
 ```bash
 npm run storage:install
 ```
 
-Установщик загружает официальный бинарник SeaweedFS 4.48, проверяет закреплённый
-SHA-256 и устанавливает его в пользовательский каталог без `sudo`.
-В отдельном терминале запустить долгоживущий процесс:
+The installer downloads the official SeaweedFS 4.48 binary, verifies the pinned
+SHA-256, and installs it in a user directory without `sudo`.
+Start the long-running process in a separate terminal:
 
 ```bash
 npm run storage:dev
 ```
 
-Он использует ключи из `.env`, создаёт приватный bucket и слушает loopback.
-Данные, конфигурация доступа и лог находятся в `.data/storage/`.
+It uses keys from `.env`, creates a private bucket, and listens on loopback.
+Data, access configuration, and the log are stored in `.data/storage/`.
 
-**Вариант B — контейнер SeaweedFS:**
+**Option B — a SeaweedFS container:**
 
 ```bash
 docker compose up -d --wait db storage
 ```
 
-В этом случае `storage:install` и `storage:dev` не нужны. Не запускайте native
-и контейнерное хранилище одновременно на порту 9000. Контейнер хранит данные
-в volume `seaweed`, native — в `.data/storage/`; переключение способа запуска
-не переносит фотографии между ними. Текущая конфигурация использует SeaweedFS,
-поэтому старый образ MinIO устанавливать не нужно.
+In this case, `storage:install` and `storage:dev` are not needed. Do not run native
+and containerized storage simultaneously on port 9000. The container stores data
+in the `seaweed` volume, the native option in `.data/storage/`; switching the launch method
+does not transfer photos between them. The current configuration uses SeaweedFS,
+so there is no need to install the old MinIO image.
 
-Когда хранилище запущено, в другом терминале:
+Once storage is running, in another terminal:
 
 ```bash
 npm run storage:check
 ```
 
-Проверка записывает, читает и удаляет собственный временный объект, а также
-проверяет запрет анонимного доступа. Это проверка локального хранилища,
-а не команда миграции или импорта фотографий.
+The check writes, reads, and deletes its own temporary object and also
+verifies that anonymous access is denied. This checks local storage;
+it is not a command for migrations or photo imports.
 
-### 4. Запустить dev-сервер
+### 4. Start the dev server
 
 ```bash
 npm run dev
 ```
 
-Открыть **http://localhost:3000**. Адрес должен совпадать с `APP_URL`:
-`localhost` и `127.0.0.1` считаются разными origin. После изменения переменных
-перезапустите сервер и worker. При другом порте измените `APP_URL` и запустите,
-например, `npm run dev -- --port 3001`.
+Open **http://localhost:3000**. The address must match `APP_URL`:
+`localhost` and `127.0.0.1` are considered different origins. After changing variables,
+restart the server and media worker. For another port, change `APP_URL` and run,
+for example, `npm run dev -- --port 3001`.
 
-### 5. Создать и назначить первого суперадмина
+### 5. Create an account and assign the first superadmin
 
-Автоматического seed и стандартного пароля администратора **нет**.
+There is **no** automatic seed or default administrator password.
 
-1. На работающем сайте открыть `/register` и зарегистрировать свой аккаунт.
-   Пароль аккаунта: **8–128 символов**. Новый пользователь получает `ORGANIZER`.
-2. В отдельном терминале из корня проекта выполнить, подставив email этого аккаунта:
+1. Open `/register` on the running website and register your account.
+   Account password: **8–128 characters**. A new user receives `ORGANIZER`.
+2. In a separate terminal at the project root, run the command with that account's email:
 
    ```bash
    npm run admin:bootstrap -- --email owner@example.com
    ```
 
-3. Войти заново и открыть **http://localhost:3000/admin**. В кабинете появится
-   ссылка «Суперадмин».
+3. Sign in again and open **http://localhost:3000/admin**. A superadmin link
+   will appear in the dashboard.
 
-CLI назначает существующему активному пользователю роль `ADMIN`; аккаунт он
-не создаёт и пароль не меняет. При повышении роли текущие сессии и ссылки
-восстановления отзываются. Повторная команда для уже существующего `ADMIN`
-не отзывает его сессии. Команда работает с БД из `DATABASE_URL`: локальные и
-облачные аккаунты независимы. Для облачной БД используйте отдельную команду
-из [раздела Render](#render), сохраняя локальный `.env`.
+The CLI assigns the `ADMIN` role to an existing active user; it does not
+create an account or change the password. On promotion, current sessions and
+password recovery links are revoked. Running the command again for an existing `ADMIN`
+does not revoke their sessions. The command uses the database from `DATABASE_URL`: local and
+cloud accounts are independent. For the cloud database, use the separate command
+in the [Render section](#render), preserving the local `.env`.
 
-### 6. Запустить worker и проверить сценарий
+### 6. Start the media worker and verify the workflow
 
-Ещё один терминал, из корня проекта:
+In another terminal, at the project root:
 
 ```bash
 npm run worker:media
 ```
 
-Worker нужен для ZIP, повторов удаления, очистки зависших загрузок и записей
-дедупликации просмотров. Однократный проход вместо постоянного процесса:
+The media worker is required for ZIP, deletion retries, cleanup of stalled uploads, and
+view deduplication records. For a single pass instead of a persistent process:
 
 ```bash
 npm run worker:media:once
 ```
 
-Проверка готовности БД и S3:
+Check database and S3 readiness:
 
 ```bash
 curl --fail http://localhost:3000/api/health/ready
 ```
 
-`/api/health` — только liveness, `/api/health/ready` проверяет зависимости;
-ни один из этих ответов сам по себе не подтверждает работу worker.
-В кабинете создайте мероприятие, загрузите JPEG/PNG/WebP, откройте гостевую ссылку
-в другом браузере, проверьте пароль, лайк, оригинал и ZIP.
+`/api/health` is liveness only; `/api/health/ready` checks dependencies.
+Neither response on its own confirms that the media worker is running.
+Create an event in the dashboard, upload JPEG/PNG/WebP, open the guest link
+in another browser, and check the password, like, original, and ZIP.
 
-Для остановки процессов используйте `Ctrl+C`, контейнеров —
-`docker compose stop db storage`. Данные сохраняются. Команда `down -v` удаляет
-volumes, поэтому для обычной остановки она не нужна.
+Use `Ctrl+C` to stop the processes, and
+`docker compose stop db storage` to stop the containers. Data is preserved. The `down -v` command deletes
+volumes, so it is not needed for a normal shutdown.
 
 <a id="architecture"></a>
-## Архитектура, данные и маршруты
+## Architecture, data, and routes
 
 ```text
-Браузер гостя / организатора / суперадмина
+Guest / organizer / superadmin browser
                     │ HTTPS / cookie / JSON / multipart
                     ▼
           Next.js App Router + Route Handlers
              │ Prisma             │ AWS SDK + Sharp
              ▼                    ▼
-        PostgreSQL           Приватное S3
-     пользователи, права,    оригиналы, превью,
-     альбомы, очередь ZIP    готовые ZIP-архивы
+        PostgreSQL            Private S3
+     users, permissions,     originals, previews,
+     albums, ZIP queue       completed ZIP archives
              ▲                    ▲
              └──── media worker ──┘
 
-Next.js ── HTTPS API ── Brevo ── письмо восстановления
+Next.js ── HTTPS API ── Brevo ── password reset email
 ```
 
-Браузер получает медиа через защищённые API приложения. S3 endpoint, credentials
-и внутренние object keys не используются как публичные ссылки галереи.
-Worker использует ту же БД и bucket; Redis и отдельный брокер не нужны.
+The browser receives media through the application's protected APIs. The S3 endpoint,
+credentials, and internal object keys are not used as public gallery links.
+The media worker uses the same database and bucket; Redis and a separate message broker
+are not required.
 
-### Структура репозитория
+### Repository structure
 
 ```text
 src/
-  app/                   страницы App Router, layout, глобальные стили
+  app/                   App Router pages, layout, global styles
     api/                 HTTP Route Handlers
-    dashboard/           кабинет и управление мероприятиями
-    admin/               панель суперадминистратора
-    e/[slug]/            гостевая галерея
-  components/            формы, галереи, элементы интерфейса и темы
-  lib/                   auth, RBAC, события, медиа, ZIP, статистика, почта
+    dashboard/           dashboard and event management
+    admin/               superadmin panel
+    e/[slug]/            guest gallery
+  components/            forms, galleries, interface and theme components
+  lib/                   auth, RBAC, events, media, ZIP, statistics, email
 prisma/
-  schema.prisma          модели, связи и enum
-  migrations/            версионные SQL-миграции
-scripts/                 supervisor demo, worker, CLI администратора
+  schema.prisma          models, relations, and enums
+  migrations/            versioned SQL migrations
+scripts/                 demo supervisor, media worker, admin CLI
 infra/
-  storage/               установка и запуск локального S3
-  nginx/                 reverse proxy / TLS для собственного сервера
-tests/                   интеграционные, unit и браузерные проверки
-docs/                    отдельные инструкции по размещению и почте
-compose.yaml             PostgreSQL, S3, migrate, app и worker
-compose.production.yaml  дополнения для собственного production-сервера
-Dockerfile               контейнерная сборка
-render.yaml              Blueprint бесплатного демо
-.env.example             шаблон локальной конфигурации
+  storage/               local S3 installation and startup
+  nginx/                 HTTP reverse proxy for self-hosting; see deployment docs for TLS
+tests/                   integration, unit, and browser tests
+docs/                    separate hosting and email setup guides
+compose.yaml             PostgreSQL, S3, migrate, app, and worker
+compose.production.yaml  overrides for a self-hosted production server
+Dockerfile               container build
+render.yaml              free demo Blueprint
+.env.example             local configuration template
 ```
 
-### Модели и связи
+### Models and relations
 
-Полная схема: [prisma/schema.prisma](prisma/schema.prisma).
+Full schema: [prisma/schema.prisma](prisma/schema.prisma).
 
-| Модель | Содержание и связи |
+| Model | Fields and relations |
 | --- | --- |
-| `User` | Уникальный email, имя, хеш пароля, глобальная роль, `disabledAt`; 1:N к собственным `Event`, `Session` и загруженным `Photo`. |
-| `Event` | Владелец, уникальные slug/code, пароль, срок доступа, настройки загрузки/скачивания, квоты, счётчики и версии доступа/медиа; 1:N к фотографиям, гостевым токенам, просмотрам и задачам. |
-| `EventMember` | Связь N:M между `User` и `Event`, роль участника `ORGANIZER` или `PHOTOGRAPHER`; составной ключ `(eventId, userId)`. |
-| `Photo` | Принадлежит альбому; необязательный зарегистрированный загрузивший пользователь; S3 keys, размеры оригинала/превью, статус, резерв квоты, счётчик скачиваний. |
-| `PhotoLike` | Лайк фотографии с уникальностью `(photoId, voterHash)`. |
-| `AlbumView` | Дедупликация просмотра по `(eventId, visitorHash)` на скользящем окне 24 часа; суммарный счётчик остаётся в `Event`. |
-| `Session` | Хеш токена входа, пользователь и срок действия. |
-| `AccessToken` | Хеш гостевого токена, альбом, версия доступа и срок действия. |
-| `PasswordResetToken` | Не более одной действующей записи на пользователя; хеш токена и срок действия. |
-| `MediaJob` | Очередь ZIP: статус, попытки, lease, прогресс, ключ результата и срок хранения. |
-| `AuthRateLimit` | Общие для процессов счётчики ограничений запросов в PostgreSQL. |
+| `User` | Unique email, name, password hash, global role, `disabledAt`; 1:N relations to owned `Event` records, `Session` records, and uploaded `Photo` records. |
+| `Event` | Owner, unique slug/code, password, access expiry, upload/download settings, quotas, counters, and access/media versions; 1:N relations to photos, guest tokens, views, and jobs. |
+| `EventMember` | N:M relation between `User` and `Event`, with an `ORGANIZER` or `PHOTOGRAPHER` member role; composite key `(eventId, userId)`. |
+| `Photo` | Belongs to an album; optional registered uploader; S3 keys, original/preview sizes, status, reserved quota, and download count. |
+| `PhotoLike` | A photo like, unique on `(photoId, voterHash)`. |
+| `AlbumView` | View deduplication by `(eventId, visitorHash)` over a rolling 24-hour window; the cumulative counter remains in `Event`. |
+| `Session` | Login token hash, user, and expiry. |
+| `AccessToken` | Guest token hash, album, access version, and expiry. |
+| `PasswordResetToken` | At most one active record per user; token hash and expiry. |
+| `MediaJob` | ZIP queue: status, attempts, lease, progress, result key, and retention expiry. |
+| `AuthRateLimit` | Request limit counters stored in PostgreSQL and shared across processes. |
 
-### Страницы
+### Pages
 
-| URL | Назначение / доступ |
+| URL | Purpose / access |
 | --- | --- |
-| `/` | Главная страница. |
-| `/join` | Вход гостя по коду мероприятия. |
-| `/e/[slug]` | Гостевой альбом; при необходимости форма пароля, затем галерея, лайки, разрешённые загрузка и скачивание. |
-| `/register`, `/login` | Регистрация и вход. |
-| `/forgot-password`, `/reset-password` | Запрос письма и установка нового пароля по одноразовому токену. |
-| `/dashboard` | Защищённый кабинет со списком доступных мероприятий. |
-| `/dashboard/events/new` | Создание мероприятия организатором или `ADMIN`. |
-| `/dashboard/events/[id]` | Настройки, ссылка/код/QR, статистика, загрузка и модерация медиа доступного мероприятия. |
-| `/admin` | Пользователи, все неудалённые мероприятия и общая статистика; только `ADMIN`. |
+| `/` | Homepage. |
+| `/join` | Guest access by event code. |
+| `/e/[slug]` | Guest album: a password form if needed, followed by the gallery, likes, and permitted uploads and downloads. |
+| `/register`, `/login` | Registration and login. |
+| `/forgot-password`, `/reset-password` | Request a reset email and set a new password using a single-use token. |
+| `/dashboard` | Protected dashboard listing accessible events. |
+| `/dashboard/events/new` | Event creation by an organizer or `ADMIN`. |
+| `/dashboard/events/[id]` | Settings, link/code/QR, statistics, uploads, and media moderation for an accessible event. |
+| `/admin` | Users, all non-deleted events, and aggregate statistics; `ADMIN` only. |
 
-Ссылка альбома — `/e/<slug>` на домене приложения. Отдельные поддомены для
-каждого альбома и wildcard DNS текущий код не реализует.
+An album link is `/e/<slug>` on the application's domain. The current code does not
+implement separate subdomains for individual albums or wildcard DNS.
 
-### Основные API
+### Main APIs
 
-| Метод и путь | Назначение |
+| Method and path | Purpose |
 | --- | --- |
-| `POST /api/auth/register`, `/api/auth/login`, `/api/auth/logout` | Регистрация, создание и завершение сессии. |
-| `GET /api/auth/me` | Текущий пользователь. |
-| `POST /api/auth/forgot-password`, `/api/auth/reset-password` | Восстановление пароля. |
-| `GET, POST /api/events` | Доступные мероприятия / создание. |
-| `GET, PATCH /api/events/[id]` | Получение / изменение настроек. |
-| `GET, POST /api/events/[id]/photos` | Список / загрузка для команды мероприятия. |
-| `POST /api/events/[id]/photos/moderate` | Массовая публикация, скрытие и удаление. |
-| `GET /api/events/[id]/qr` | PNG QR-кода ссылки альбома. |
-| `GET, POST /api/events/[id]/zip` | Статус / заказ архива для команды. |
-| `POST /api/albums/resolve` | Поиск гостевого альбома по коду. |
-| `GET /api/albums/[slug]` | Публичные сведения и состояние доступа. |
-| `POST /api/albums/[slug]/unlock` | Проверка пароля и выдача гостевого доступа. |
-| `GET, POST /api/albums/[slug]/photos` | Гостевая галерея / разрешённая гостевая загрузка. |
-| `POST /api/albums/[slug]/view` | Учёт просмотра после открытия галереи. |
-| `GET, POST /api/albums/[slug]/zip` | Статус / заказ гостевого архива. |
-| `PUT /api/photos/[id]/like` | Установка или снятие лайка. |
-| `GET /api/photos/[id]/thumbnail`, `/api/photos/[id]/original` | Защищённая выдача превью / оригинала. |
-| `GET /api/zip/[id]/download` | Выдача готового разрешённого архива. |
-| `GET /api/admin/overview`, `/api/admin/users`, `/api/admin/events` | Статистика и списки для суперадминистратора. |
-| `PATCH /api/admin/users/[id]` | Смена глобальной роли, блокировка / разблокировка. |
-| `GET /api/health`, `/api/health/ready` | Liveness и readiness. |
+| `POST /api/auth/register`, `/api/auth/login`, `/api/auth/logout` | Registration, session creation, and logout. |
+| `GET /api/auth/me` | Current user. |
+| `POST /api/auth/forgot-password`, `/api/auth/reset-password` | Password recovery. |
+| `GET, POST /api/events` | List accessible events / create an event. |
+| `GET, PATCH /api/events/[id]` | Retrieve / update settings. |
+| `GET, POST /api/events/[id]/photos` | List / upload photos for the event team. |
+| `POST /api/events/[id]/photos/moderate` | Bulk publishing, hiding, and deletion. |
+| `GET /api/events/[id]/qr` | PNG QR code for the album link. |
+| `GET, POST /api/events/[id]/zip` | Archive status / request an archive for the team. |
+| `POST /api/albums/resolve` | Find a guest album by code. |
+| `GET /api/albums/[slug]` | Public information and access status. |
+| `POST /api/albums/[slug]/unlock` | Verify the password and grant guest access. |
+| `GET, POST /api/albums/[slug]/photos` | Guest gallery / permitted guest upload. |
+| `POST /api/albums/[slug]/view` | Record a view after the gallery opens. |
+| `GET, POST /api/albums/[slug]/zip` | Archive status / request a guest archive. |
+| `PUT /api/photos/[id]/like` | Set or remove a like. |
+| `GET /api/photos/[id]/thumbnail`, `/api/photos/[id]/original` | Serve a preview / original with access checks. |
+| `GET /api/zip/[id]/download` | Serve a completed archive if access is permitted. |
+| `GET /api/admin/overview`, `/api/admin/users`, `/api/admin/events` | Statistics and lists for the superadmin. |
+| `PATCH /api/admin/users/[id]` | Change a global role, block / unblock an account. |
+| `GET /api/health`, `/api/health/ready` | Liveness and readiness. |
 
 <a id="auth"></a>
-## Авторизация и права
+## Authentication and permissions
 
-Проверки выполняются на серверных страницах и в обработчиках API через
-[src/lib/auth.ts](src/lib/auth.ts), [src/lib/admin.ts](src/lib/admin.ts)
-и [src/lib/events.ts](src/lib/events.ts). Единого auth middleware/proxy нет;
-скрытие кнопки в интерфейсе не заменяет проверку на сервере.
+Checks run on server pages and in API handlers through
+[src/lib/auth.ts](src/lib/auth.ts), [src/lib/admin.ts](src/lib/admin.ts),
+and [src/lib/events.ts](src/lib/events.ts). There is no central auth middleware/proxy;
+hiding a button in the interface does not replace a server check.
 
-| Глобальная роль | Полномочия |
+| Global role | Permissions |
 | --- | --- |
-| `ADMIN` | В админ-панели и навигации — «Суперадмин», в профиле — «Администратор». Доступ к `/admin`, всем неудалённым мероприятиям, их настройкам и модерации. |
-| `ORGANIZER` | Создаёт мероприятия, видит собственные и мероприятия с членством. Изменяет настройки своего мероприятия либо мероприятия, где у него `EventMember.role = ORGANIZER`. |
-| `PHOTOGRAPHER` | Работает с фотографиями доступных ему мероприятий; не создаёт мероприятия и не получает права изменения их настроек. |
-| Гость без аккаунта | Просмотр, лайки, загрузка и скачивание в пределах настроек конкретного альбома и гостевого доступа. |
+| `ADMIN` | Labeled as superadmin in the admin panel and navigation, and as administrator in the profile. Access to `/admin`, all non-deleted events, their settings, and moderation. |
+| `ORGANIZER` | Creates events and sees owned events and events they belong to. Can change settings for an owned event or an event where their `EventMember.role = ORGANIZER`. |
+| `PHOTOGRAPHER` | Works with photos in accessible events; cannot create events or change their settings. |
+| Guest without an account | Viewing, likes, uploads, and downloads within the settings and guest access rules of the specific album. |
 
-В модели предусмотрено членство команды, и оно учитывается в проверках.
-**UI/API назначения участников мероприятия пока нет**; изменение глобальной роли
-пользователя само по себе не добавляет его в чужие мероприятия. Для доступного
-участнику мероприятия текущая политика разрешает загрузку и модерацию медиа,
-включая роль фотографа.
+The model supports team membership, and access checks take it into account.
+**There is currently no UI/API for assigning event members**; changing a user's
+global role alone does not grant access to other users' events. For events accessible
+to a member, the current policy allows media uploads and moderation, including
+for photographers.
 
-Суперадмин может искать пользователей/альбомы, менять роли и блокировать аккаунты.
-Изменение роли или блокировка отзывает сессии и ссылки восстановления.
-Нельзя изменить собственную роль/блокировку или лишить систему последнего
-активного `ADMIN`; проверки повторяются в транзакции с блокировками БД.
-**Блокировка владельца не закрывает его гостевые альбомы автоматически.**
+A superadmin can search users/albums, change roles, and block accounts.
+A role change or account block revokes sessions and password reset links.
+You cannot change your own role/block status or remove the system's last active
+`ADMIN`; checks are repeated inside a transaction with database locks.
+**Blocking an owner does not automatically close their guest albums.**
 
-Пароли хешируются Argon2id. Сессия использует случайный 32-байтовый токен;
-в БД хранится SHA-256 хеш. Cookie — HttpOnly, SameSite=Lax, с Secure для HTTPS,
-срок сессии 7 дней. Изменяющие запросы проверяют Origin относительно `APP_URL`;
-лимиты попыток хранятся в БД. При регистрации подтверждение email пока отсутствует.
+Passwords are hashed with Argon2id. A session uses a random 32-byte token;
+the database stores its SHA-256 hash. The cookie is HttpOnly, SameSite=Lax,
+and Secure for HTTPS; sessions last 7 days. Requests that change data check
+Origin against `APP_URL`; attempt limits are stored in the database.
+Email verification is not yet implemented for registration.
 
-Пароль альбома необязателен, при включении — **3–128 символов**.
-Гостевой доступ к защищённому альбому выдаётся отдельным токеном до 24 часов,
-с учётом срока жизни альбома; изменение защищаемых настроек обновляет версию доступа.
+An album password is optional; when enabled, it must be **3–128 characters**.
+Guest access to a protected album uses a separate token valid for up to 24 hours,
+subject to the album's expiry. Changes to protected settings update the access version.
 
-### Восстановление пароля
+### Password recovery
 
-Форма `/forgot-password` отправляет ссылку через Brevo HTTPS API. Ответ не раскрывает,
-существует ли аккаунт; он также не гарантирует доставку. Токен действует 30 минут,
-одноразовый, хранится хешированным; новая ссылка отменяет предыдущую. После успешной
-смены пароля отзываются сессии и reset-токены, роль пользователя сохраняется.
-Лимит на email — один запрос в минуту и три в час; общий — 20 в минуту,
-60 в час и 200 в сутки. Отправка выполняется через Next `after`, без отдельной
-долговечной почтовой очереди и автоматических повторов.
+The `/forgot-password` form sends a link through the Brevo HTTPS API. The response
+does not reveal whether the account exists and does not guarantee delivery.
+The token is valid for 30 minutes, is single-use, and is stored as a hash;
+a new link invalidates the previous one. A successful password change revokes
+sessions and reset tokens while preserving the user's role.
+The per-email limit is one request per minute and three per hour; global limits
+are 20 per minute, 60 per hour, and 200 per day. Email is sent through Next `after`,
+without a separate durable email queue or automatic retries.
 
-Оператор после независимой проверки владельца активного аккаунта может создать
-ссылку без email-провайдера:
+After independently verifying ownership of an active account, an operator can
+create a link without an email provider:
 
 ```bash
 npm run admin:reset-password -- --email owner@example.com --output-file .data/recovery/reset-link.txt
 ```
 
-Новый файл получает права `600`, новые каталоги — `700`. Существующий файл
-не перезаписывается; для следующей ссылки выберите новое имя. Без `--output-file`
-секретная ссылка выводится в терминал. CLI использует локальные `DATABASE_URL`
-и `APP_URL`; для облака передавайте отдельное окружение явно.
+The new file receives permissions `600`, and new directories receive `700`.
+An existing file is not overwritten; choose a new name for the next link.
+Without `--output-file`, the secret link is printed in the terminal. The CLI uses
+the local `DATABASE_URL` and `APP_URL`; explicitly supply a separate environment
+for cloud use.
 
 <a id="media"></a>
-## Загрузка фотографий, QR и фоновые задачи
+## Photo uploads, QR codes, and background jobs
 
-1. Организатор создаёт событие. Сервер генерирует уникальный восьмисимвольный код,
-   slug и ссылку `/e/[slug]`. QR endpoint кодирует эту ссылку в PNG 512×512;
-   QR не содержит пароль и не сохраняется в S3.
-2. Организатор или гость выбирает JPEG, PNG или WebP. Пакетный UI загружает до
-   20 выбранных файлов последовательными запросами; каждый POST содержит один файл.
-   Для гостя проверяются разрешение загрузки, пароль/токен и срок доступа.
-3. Сервер проверяет права, rate limit, размер, реальный формат изображения,
-   число пикселей и отсутствие анимации. Sharp создаёт WebP-превью до 1200×1200
-   без увеличения, quality 80, с учётом EXIF-поворота. Исходный файл сохраняется
-   без перекодирования; превью не сохраняет EXIF-метаданные.
-4. Транзакция PostgreSQL блокирует событие и резервирует квоту оригинала и превью.
-   Создаётся запись `Photo` в `PROCESSING` со сроком резерва.
-5. Сервер записывает оригинал и превью в приватный S3:
+1. An organizer creates an event. The server generates a unique eight-character
+   code, slug, and `/e/[slug]` link. The QR endpoint encodes this link as a 512×512 PNG;
+   the QR code contains no password and is not stored in S3.
+2. An organizer or guest selects JPEG, PNG, or WebP files. The bulk upload UI sends
+   up to 20 selected files in sequential requests; each POST contains one file.
+   Guest requests check upload permission, the password/token, and access expiry.
+3. The server checks permissions, rate limits, size, the actual image format,
+   pixel count, and absence of animation. Sharp creates a WebP preview up to
+   1200×1200 without enlargement, at quality 80, applying EXIF orientation.
+   The original file is stored without re-encoding; the preview does not retain
+   EXIF metadata.
+4. A PostgreSQL transaction locks the event and reserves quota for the original
+   and preview. A `Photo` record is created in `PROCESSING` with a reservation expiry.
+5. The server writes the original and preview to a private S3 bucket:
 
    ```text
    events/<eventId>/photos/<photoId>/original.<format>
    events/<eventId>/photos/<photoId>/thumbnail.webp
    ```
 
-6. Перед публикацией повторно проверяются условия доступа. Фото становится
-   `PUBLISHED`, резерв превращается в занятый объём, обновляется версия медиа.
-   Разрешённые гостевые фотографии публикуются сразу: `moderateUploads` — поле
-   совместимости, ожидание одобрения не используется.
-7. Галерея запрашивает фотографии порциями по 40 и лениво загружает превью.
-   Оригиналы/превью идут через API с проверками доступа, а не через публичный bucket.
-   Массовая модерация обрабатывает до 100 фотографий: публикация, скрытие, удаление.
+6. Access conditions are checked again before publication. The photo becomes
+   `PUBLISHED`, reserved space becomes used storage, and the media version is updated.
+   Permitted guest photos are published immediately: `moderateUploads` is a compatibility
+   field, and approval is not required.
+7. The gallery requests photos in batches of 40 and loads previews lazily.
+   Originals/previews are served through APIs with access checks, not a public bucket.
+   Bulk moderation handles up to 100 photos: publishing, hiding, and deletion.
 
-**Превью создаются внутри запроса загрузки**, не в очереди worker.
-Для ZIP приложение создаёт/переиспользует задачу `MediaJob`, а worker потоково
-читает оригиналы и собирает архив в S3 без временного локального файла.
-Результат переиспользуется до часа, пока совпадают версии доступа и медиа;
-изменение альбома инвалидирует устаревший архив. Worker также повторяет удаление
-и убирает просроченные `PROCESSING`, `DELETING`, ZIP и записи дедупликации просмотров.
+**Previews are created during the upload request**, not in the media worker queue.
+For ZIP downloads, the application creates/reuses a `MediaJob`, and the media worker
+streams originals into an archive in S3 without a temporary local file.
+The result is reused for up to an hour while the access and media versions match;
+album changes invalidate an outdated archive. The media worker also retries deletions
+and cleans up expired `PROCESSING` uploads, `DELETING` photos, ZIP archives,
+and view deduplication records.
 
-### Лимиты и смысл статистики
+### Limits and statistics
 
-| Параметр | Обычное окружение | Render Blueprint |
+| Parameter | Standard environment | Render Blueprint |
 | --- | --- | --- |
-| Один файл | До 25 МиБ по умолчанию, дополнительно лимит события | До 3 МиБ, дополнительно лимит события |
-| Число пикселей | До 40 Мп | До 6 Мп |
-| Одновременные загрузки на процесс | 2 | 1 |
-| ZIP: сумма оригиналов | До 1 ГиБ по умолчанию | До 40 МиБ |
-| ZIP: число фото | До 10000 по умолчанию | До 100 |
+| Single file | Up to 25 MiB by default, also subject to the event limit | Up to 3 MiB, also subject to the event limit |
+| Pixel count | Up to 40 MP | Up to 6 MP |
+| Concurrent uploads per process | 2 | 1 |
+| ZIP: total original file size | Up to 1 GiB by default | Up to 40 MiB |
+| ZIP: photo count | Up to 10000 by default | Up to 100 |
 
-Лимиты одного события по умолчанию: 1000 фотографий, 10 ГиБ оригиналов+превью,
-25 МиБ на файл. Форма допускает 1–10000 фото, 10–102400 МиБ общего объёма и
-1–25 МиБ на файл. Глобальные ограничения сервера имеют приоритет; квота альбома
-не является квотой всего S3-аккаунта. Для бесплатного хранилища задавайте небольшие
-лимиты мероприятий. Истечение срока альбома закрывает гостевой доступ, но
-автоматически не удаляет фотографии.
+Default limits per event are 1000 photos, 10 GiB for originals+previews,
+and 25 MiB per file. The form accepts 1–10000 photos, 10–102400 MiB of total storage,
+and 1–25 MiB per file. Global server limits take precedence; an album quota
+is not the quota for the entire S3 account. Set small event limits for free storage.
+An album's expiry closes guest access but does not automatically delete photos.
 
-Просмотр засчитывается после загрузки гостевой галереи, не чаще раза за
-скользящие 24 часа для идентификатора посетителя этого альбома. Это не число
-уникальных людей. Лайк уникален по фото и идентификатору пользователя/гостевого
-cookie; смена браузера гостем не предотвращается как накрутка.
-Скачивание считается при разрешённой выдаче сервером, а не после подтверждения
-получения всех байтов клиентом. Статистика занятого места учитывает оригиналы
-и превью, резерв показывается отдельно; ZIP и общий объём свободного S3
-в этот показатель не входят.
+A view is counted after the guest gallery loads, at most once in a rolling
+24-hour period for that album's visitor identifier. This is not a count of unique
+people. A like is unique per photo and user/guest cookie identifier;
+guests switching browsers are not prevented from inflating the count.
+A download is counted when the server permits delivery, not after confirmation
+that the client received every byte. Used storage statistics include originals
+and previews, with reserved space shown separately; ZIP archives and the total
+available S3 storage are not included in this metric.
 
 <a id="render"></a>
-## Сборка и деплой на Render.com
+## Building and deploying on Render.com
 
-Рекомендуемый для учебного показа вариант уже описан в
-[render.yaml](render.yaml): **один Free Web Service** с Node.js,
-Next.js и worker в одном процессе-supervisor. БД и файлы находятся в Supabase.
-Развёртывать приложение нужно как Web Service: ему нужны серверные API,
-подключение PostgreSQL и фоновые задачи.
+The recommended setup for a course demonstration is defined in
+[render.yaml](render.yaml): **one Free Web Service** running Node.js,
+with Next.js and the media worker managed by a shared supervisor. The database
+and files are hosted on Supabase. Deploy the application as a Web Service:
+it needs server-side APIs, a PostgreSQL connection, and background processing.
 
-### 1. Подготовить Supabase PostgreSQL
+### 1. Prepare Supabase PostgreSQL
 
-Создайте проект и скопируйте **Session pooler** connection string, порт `5432`.
-Используйте адрес и имя пользователя именно своего проекта. Подставьте пароль
-БД в URL-кодированном виде и параметры:
+Create a project and copy its **Session pooler** connection string, using port `5432`.
+Use the host and username provided for your project. Insert the URL-encoded
+database password and the following parameters:
 
 ```dotenv
 DATABASE_URL=postgresql://postgres.<PROJECT_REF>:<URL_ENCODED_PASSWORD>@<POOLER_HOST>:5432/postgres?schema=partyphoto&connection_limit=2&pool_timeout=20&sslmode=require
 ```
 
-Это шаблон, а не готовый credential. Важно сохранить **`schema=partyphoto`**:
-`demo:start` допускает эту отдельную схему и тестовые `partyphoto_test_*`,
-но отвергает `public`. Не добавляйте `partyphoto` в список схем, открытых
-через Supabase Data API. Приложение обращается к PostgreSQL напрямую через Prisma;
-Data API и Supabase Auth ему не нужны.
+This is a template, not a working credential. Keep **`schema=partyphoto`**:
+`demo:start` accepts this dedicated schema and test schemas named `partyphoto_test_*`,
+but rejects `public`. Do not add `partyphoto` to the schemas exposed through the
+Supabase Data API. The application connects to PostgreSQL directly through Prisma;
+it does not need the Data API or Supabase Auth.
 
-Таблицы создаются миграциями автоматически при старте demo supervisor.
-Не нужно вручную переносить SQL в браузер или запускать `prisma migrate dev`
-на облачной базе.
+Migrations create the tables automatically when the demo supervisor starts.
+You do not need to paste SQL into the browser or run `prisma migrate dev`
+against the cloud database.
 
-### 2. Подготовить Supabase Storage
+### 2. Prepare Supabase Storage
 
-Создайте **приватный** bucket `partyphoto` с выключенным Public access.
-Ограничения bucket должны разрешать JPEG/PNG/WebP и ZIP; учитывайте размер
-архива с накладными расходами, например до 50 МиБ для текущего demo-предела.
-Скопируйте регион и S3 endpoint из настроек проекта, создайте S3 access/secret keys.
-Пример формы endpoint:
+Create a **private** bucket named `partyphoto` with Public access disabled.
+The bucket restrictions must allow JPEG, PNG, WebP, and ZIP files. Account for
+ZIP overhead when setting the file size limit; for example, allow up to 50 MiB
+for the current demo configuration. Copy the region and S3 endpoint from the
+project settings, then create S3 access and secret keys. The endpoint has this form:
 
 ```text
 https://<PROJECT_REF>.storage.supabase.co/storage/v1/s3
 ```
 
-Используйте выданный провайдером адрес. Приложению нужны права чтения, записи,
-удаления и multipart upload. Для очистки worker также нужны `ListBucket`,
-`ListBucketMultipartUploads` и `AbortMultipartUpload`.
-Ключи добавляются только в серверное окружение.
-S3 bucket для облака нужно создать заранее: локальный SeaweedFS bootstrap
-на Render не запускается.
+Use the endpoint provided by your storage provider. The application needs read,
+write, delete, and multipart upload permissions. The worker also needs
+`ListBucket`, `ListBucketMultipartUploads`, and `AbortMultipartUpload` for cleanup.
+Add these keys only to the server environment.
+Create the cloud bucket in advance: the local SeaweedFS bootstrap does not run
+on Render.
 
-### 3. Создать сервис из Blueprint
+### 3. Create the service from the Blueprint
 
-В Render выберите **New → Blueprint**, подключите GitHub-репозиторий,
-ветку `main` и файл **`render.yaml` в корне**. `Blueprint Path` — `render.yaml`,
-а не путь к `.env` или `.env.demo`. Выберите уникальное имя Blueprint.
+In Render, select **New → Blueprint**, connect the GitHub repository, select
+the `main` branch, and use **`render.yaml` at the repository root**.
+Set `Blueprint Path` to `render.yaml`, not to `.env` or `.env.demo`.
+Choose a unique Blueprint name.
 
-Проверьте настройки сервиса:
+Check the service settings:
 
-| Поле | Значение |
+| Field | Value |
 | --- | --- |
 | Runtime | Node |
 | Plan / Region | Free / Frankfurt |
-| Branch / Root Directory | `main` / корень репозитория |
+| Branch / Root Directory | `main` / repository root |
 | Build Command | `npm ci --include=dev && npm run build && npm run demo:prepare` |
 | Start Command | `npm run demo:start` |
 | Health Check Path | `/api/health/ready` |
-| Auto Deploy | Выключен в Blueprint: `autoDeployTrigger: "off"` |
+| Auto Deploy | Disabled in the Blueprint: `autoDeployTrigger: "off"` |
 
-Те же значения можно указать при ручном создании Web Service.
-Формат Blueprint описан в [документации Render](https://render.com/docs/blueprint-spec).
+Use the same settings if you create a Web Service manually.
+See the [Render Blueprint specification](https://render.com/docs/blueprint-spec)
+for the configuration format.
 
-### 4. Заполнить окружение Render
+### 4. Configure the Render environment
 
-Blueprint уже задаёт `NODE_VERSION=22`, `NODE_ENV=production`,
+The Blueprint already sets `NODE_VERSION=22`, `NODE_ENV=production`,
 `PARTYPHOTO_DEMO_MODE=true`, `MAX_UPLOAD_BYTES=3145728`,
 `MAX_ZIP_BYTES=41943040`, `MAX_ZIP_PHOTOS=100`,
-`S3_FORCE_PATH_STYLE=true`, `S3_BUCKET=partyphoto`.
+`S3_FORCE_PATH_STYLE=true`, and `S3_BUCKET=partyphoto`.
 
-Обязательно заполните пять значений своего Supabase-проекта:
+Provide these five values from your Supabase project:
 
 - `DATABASE_URL`
 - `S3_ENDPOINT`
@@ -624,89 +631,93 @@ Blueprint уже задаёт `NODE_VERSION=22`, `NODE_ENV=production`,
 - `S3_ACCESS_KEY_ID`
 - `S3_SECRET_ACCESS_KEY`
 
-Для восстановления по почте отдельно добавьте `BREVO_API_KEY`, `MAIL_FROM_EMAIL`
-и при необходимости `MAIL_FROM_NAME`: этих полей нет в Blueprint.
-`EMAIL_TEST_API_URL` на Render задавать нельзя.
+For password reset emails, also add `BREVO_API_KEY`, `MAIL_FROM_EMAIL`, and,
+optionally, `MAIL_FROM_NAME`. These variables are not included in the Blueprint.
+Do not set `EMAIL_TEST_API_URL` on Render.
 
-**`APP_URL` обычно оставьте отсутствующим**: supervisor получает HTTPS origin
-из `RENDER_EXTERNAL_URL`. Не импортируйте локальный `APP_URL=http://localhost:3000`.
-Если используете собственный домен, задайте `APP_URL=https://ваш-домен`
-без пути, query или fragment и используйте этот домен в браузере.
-Пустая строка `APP_URL` не считается отсутствующей настройкой.
+**Normally, leave `APP_URL` unset**: the supervisor derives the HTTPS origin
+from `RENDER_EXTERNAL_URL`. Do not import a local `APP_URL=http://localhost:3000`.
+For a custom domain, set `APP_URL=https://your-domain.example` without a path,
+query string, or fragment, and use that domain in the browser.
+An empty `APP_URL` string is not treated as an unset variable.
 
-В существующем сервисе: **Environment → Edit**. Можно импортировать содержимое
-облачного env-файла через **Import from .env**; имя файла не является именем
-переменной. У каждого ключа должна остаться одна строка, без дублей.
-Не загружайте локальный `.env` с localhost-параметрами.
-[Инструкция Render по переменным](https://render.com/docs/configure-environment-variables).
+For an existing service, go to **Environment → Edit**. You can import the contents
+of a cloud environment file through **Import from .env**; the filename is not
+an environment variable name. Keep exactly one entry for each key.
+Do not upload a local `.env` containing localhost settings.
+See [Render's environment variable guide](https://render.com/docs/configure-environment-variables).
 
-### 5. Дождаться сборки и запуска
+### 5. Wait for the build and startup
 
-Порядок выполнения:
+The deployment runs in this order:
 
-1. `npm ci --include=dev` устанавливает зависимости по lock-файлу, включая Prisma CLI.
-2. `npm run build` выполняет `prisma generate` и `next build` с `output: "standalone"`.
-   На этом шаге миграции БД не применяются.
-3. `demo:prepare` копирует `.next/static` и существующий `public/` в standalone
-   и удаляет из него `.env*`, чтобы секреты не попадали в runtime-артефакт.
-4. `demo:start` получает окружение Render, валидирует БД/S3/HTTPS origin и порт,
-   запускает `prisma migrate deploy`.
-5. Только после успешных миграций запускаются `.next/standalone/server.js`
-   и `scripts/media-worker.mjs`. Завершение одного из процессов останавливает
-   supervisor и второй процесс, чтобы сервис не оставался без worker.
+1. `npm ci --include=dev` installs the locked dependencies, including the Prisma CLI.
+2. `npm run build` runs `prisma generate` and `next build` with `output: "standalone"`.
+   Database migrations do not run at this stage.
+3. `demo:prepare` copies `.next/static` and `public/`, if present, into the standalone
+   output and removes `.env*` files from it to keep secrets out of the runtime artifact.
+4. `demo:start` reads the Render environment, validates the database, S3 settings,
+   HTTPS origin, and port, then runs `prisma migrate deploy`.
+5. Only after migrations succeed does it start `.next/standalone/server.js`
+   and `scripts/media-worker.mjs`. If either process exits, the supervisor stops
+   itself and the other process so that the service cannot keep running without a worker.
 
-`demo:start` сам не читает `.env.demo`. `npm start` запускает только `next start`,
-поэтому он не заменяет Render Start Command. Не удаляйте devDependencies после
-сборки: supervisor использует Prisma CLI и при запуске миграций.
+`demo:start` does not read `.env.demo` itself. `npm start` only runs `next start`,
+so it is not a substitute for the Render Start Command. Do not remove
+devDependencies after the build: the supervisor needs the Prisma CLI to run
+migrations at startup.
 
-После статуса **Live** откройте адрес из Render Dashboard и `/api/health/ready`,
-затем проверьте регистрацию, альбом, загрузку, скачивание оригинала и ZIP.
-Локальные пользователи и фотографии не переносятся в облако автоматически.
+Once the service is **Live**, open the URL shown in the Render Dashboard and
+check `/api/health/ready`. Then test registration, album access, photo uploads,
+original downloads, and ZIP downloads. Local users and photos are not
+automatically copied to the cloud.
 
-### 6. Назначить облачного суперадмина
+### 6. Assign the cloud superadmin
 
-Зарегистрируйте свой аккаунт **на публичном сайте**. На своём компьютере создайте
-игнорируемый `.env.demo` с облачным `DATABASE_URL`, сохранив локальный `.env`.
-Проверьте, что терминал не переопределяет его другим экспортированным
-`DATABASE_URL`, и выполните:
+Register your account **on the public website**. On your computer, create an
+ignored `.env.demo` file with the cloud `DATABASE_URL`, keeping your local `.env`
+intact. Make sure an exported `DATABASE_URL` in your terminal does not override
+the file, then run:
 
 ```bash
 node --env-file=.env.demo scripts/admin-bootstrap.mjs --email owner@example.com
 ```
 
-CLI не ограничивает выбор проекта/схемы: он изменяет БД, переданную через
-`DATABASE_URL`. После назначения войдите на публичном сайте заново и откройте
-`/admin`. Доступ к shell на Render для этого не нужен.
+The CLI does not restrict the project or schema: it modifies the database
+specified by `DATABASE_URL`. After assigning the role, sign in again on the
+public website and open `/admin`. This does not require shell access on Render.
 
-### 7. Обновления, домен и ограничения бесплатного варианта
+### 7. Updates, domains, and free-tier limitations
 
-После коммита и push новой версии в `main` откройте
-**Manual Deploy → Deploy latest commit**: автоматический деплой в Blueprint выключен.
-Миграции применяются при старте новой версии; перед изменениями production-схемы
-нужны резервная копия и план совместимости данных.
+After committing and pushing a new version to `main`, select
+**Manual Deploy → Deploy latest commit**. Automatic deployment is disabled
+in the Blueprint. Migrations run when the new version starts; before changing
+a production schema, prepare a backup and a data compatibility plan.
 
-Для учебного показа достаточно адреса `*.onrender.com`. При подключении своего
-домена добавьте его в настройки Render, внесите DNS-записи, которые покажет
-платформа, дождитесь TLS и обновите `APP_URL`. Нужные DNS-значения зависят от домена
-и сервиса; Nginx/Certbot внутри Render Web Service запускать не требуется.
+The `*.onrender.com` address is sufficient for a course demonstration. To use
+a custom domain, add it in the Render settings, create the DNS records shown
+by the platform, wait for TLS provisioning, and update `APP_URL`. The required
+DNS values depend on the domain and service. You do not need to run Nginx
+or Certbot inside a Render Web Service.
 
-Render Free засыпает после 15 минут без входящего трафика, а локальные изменения
-файлов теряются при рестарте/деплое. Поэтому БД и фото вынесены в Supabase,
-а worker спит вместе с сайтом. Перед показом откройте сайт заранее и проверьте
-readiness и архив. Это учебное размещение с ресурсными ограничениями,
-а не гарантия непрерывной обработки задач.
-[Ограничения Render Free](https://render.com/docs/free).
+Render Free spins down after 15 minutes without incoming traffic, and local
+filesystem changes are lost on restarts or deployments. The database and photos
+are therefore stored on Supabase, and the worker sleeps along with the website.
+Before a demonstration, open the site early and check readiness and ZIP generation.
+This setup is intended for a resource-constrained course demo; it does not
+guarantee continuous background processing.
+See [Render Free limitations](https://render.com/docs/free).
 
-Для собственного сервера в репозитории есть Docker/Compose, reverse proxy и
-инструкция [docs/deployment.md](docs/deployment.md). Этот вариант требует отдельно
-проверить домен, HTTPS, резервные копии и полный runtime на выбранном сервере;
-он не используется бесплатным Render Blueprint.
+For your own server, the repository includes Docker/Compose, a reverse proxy,
+and [deployment instructions](docs/deployment.md). That setup requires separate
+verification of the domain, HTTPS, backups, and the complete runtime on your
+chosen server. It is not used by the free Render Blueprint.
 
 <a id="tests"></a>
-## Проверки и тесты
+## Checks and tests
 
-Базовые проверки кода и сборки выполняйте с остановленным dev-сервером,
-чтобы `next dev` и `next build` не изменяли `.next` одновременно:
+Stop the development server before running the basic code and build checks,
+so that `next dev` and `next build` do not modify `.next` at the same time:
 
 ```bash
 npm run db:validate
@@ -717,16 +728,16 @@ npm run test:email
 npm run test:demo
 ```
 
-`build` генерирует Prisma Client, но не запускает миграции/worker.
-Для обычного production-запуска `npm start` требуется HTTPS origin в `APP_URL`
-и отдельно запущенный worker; для локальной разработки используйте `npm run dev`.
+`build` generates Prisma Client but does not run migrations or start the worker.
+A standard production launch with `npm start` requires an HTTPS origin in
+`APP_URL` and a separately running worker. Use `npm run dev` for local development.
 
-Интеграционные тесты ниже требуют **локальные** БД и S3, применённые миграции
-и запущенный dev-сервер с обычными лимитами, без demo mode. Перед автоматическими
-интеграционными и браузерными тестами остановите отдельно запущенный
-`npm run worker:media`: тесты сами вызывают обработчик ZIP и проверяют захват
-задач/повторы, поэтому внешний worker может перехватить тестовую задачу.
-Запускайте наборы последовательно:
+The integration tests below require a **local** database and S3 storage, applied
+migrations, and a running development server with standard limits and demo mode
+disabled. Before running automated integration or browser tests, stop any
+separately running `npm run worker:media` process. The tests invoke the ZIP
+handler themselves and check job claiming and retries; an external worker
+could claim a test job first. Run the suites sequentially:
 
 ```bash
 npm run test:auth
@@ -738,12 +749,13 @@ npm run test:engagement
 npm run test:views
 ```
 
-Тесты создают и удаляют собственные fixtures, включая аккаунты
-`example.invalid`. Используйте локальную тестовую БД; `.env.demo` и публичный
-сайт для этих команд не подходят. Playwright сам dev-сервер не запускает.
+The tests create and remove their own fixtures, including `example.invalid`
+accounts. Use a local test database; neither `.env.demo` nor the public website
+is suitable for these commands. Playwright does not start the development
+server automatically.
 
-Для интеграционной проверки email-сценария перезапустите dev-сервер
-с локальным mock endpoint; настоящие письма отправляться не будут:
+To run the email flow integration test, restart the development server with
+a local mock endpoint. No real emails will be sent:
 
 ```bash
 EMAIL_TEST_API_URL=http://127.0.0.1:3119/v3/smtp/email \
@@ -751,28 +763,28 @@ BREVO_API_KEY=local-test-key MAIL_FROM_EMAIL=partyphoto@example.invalid \
 MAIL_FROM_NAME=PartyPhoto npm run dev
 ```
 
-В другом терминале:
+In another terminal, run:
 
 ```bash
 npm run test:forgot-password
 ```
 
-Этот интеграционный тест сам поднимает mock на порту 3119. После него верните
-обычный `npm run dev`. Браузерные email-тесты подменяют ответы через Playwright
-`page.route` и не требуют `EMAIL_TEST_API_URL`:
+This integration test starts its own mock server on port 3119. Afterwards,
+restart the application with the usual `npm run dev`. Browser email tests mock
+responses through Playwright's `page.route` and do not need `EMAIL_TEST_API_URL`:
 
 ```bash
 npm run test:ui
 ```
 
-Только переключение темы:
+To test only theme switching:
 
 ```bash
 npm run test:ui -- tests/theme.browser.spec.ts
 ```
 
-Проверка production demo runtime использует отдельную случайную схему
-`partyphoto_test_*` в локальном PostgreSQL и локальное S3:
+The production demo runtime test uses a separate, randomly named
+`partyphoto_test_*` schema in local PostgreSQL and local S3 storage:
 
 ```bash
 npm run build
@@ -780,52 +792,55 @@ npm run demo:prepare
 npm run test:demo:integration
 ```
 
-Она запускает собственный сервер на порту 3108 и очищает свои тестовые данные.
-После завершения автоматических тестов снова запустите `npm run worker:media`
-для обычной работы с локальными ZIP и очисткой.
-Назначение тестов и ограничения окружения проверяются в `tests/`;
-полный почтовый сценарий описан в [docs/email.md](docs/email.md).
+It starts its own server on port 3108 and cleans up its test data.
+After the automated tests finish, restart `npm run worker:media` for normal
+local ZIP processing and cleanup. See `tests/` for the scope and environment
+requirements of each test suite, and [docs/email.md](docs/email.md) for the
+complete email testing workflow.
 
 <a id="troubleshooting"></a>
-## Диагностика и ограничения
+## Troubleshooting and limitations
 
-| Симптом | Что проверить |
+| Symptom | What to check |
 | --- | --- |
-| `Missing DATABASE_URL` на Render | Значение добавлено в Environment, а не строка с именем `.env.demo`; изменения сохранены с новым деплоем. |
-| Ошибка схемы при `demo:start` | В URL ровно один параметр `schema=partyphoto`; локальный `schema=public` предназначен для dev. |
-| Ошибка Origin, cookie или HTTPS | `APP_URL` совпадает с адресом браузера; для production HTTPS. На Render удалён случайно импортированный localhost origin. |
-| Ошибка Prisma подключения | БД запущена и здорова, правильны host/port/user/password; специальный пароль URL-кодирован, применены миграции. |
-| `Duplicate key` в Render Environment | Удалить лишнюю строку дублирующегося ключа, сохранив одну с правильным значением. |
-| S3 ошибка / readiness не готов | Правильны endpoint, регион, ключи, bucket и path-style; приватный bucket существует. Для локального S3 выполнить `storage:check`. |
-| Фото отвергнуто на демо | JPEG/PNG/WebP, нет анимации, до 3 МиБ и 6 Мп; есть свободная квота и разрешение гостевой загрузки. |
-| ZIP остаётся в очереди | Работает media worker, сервис Render проснулся, не превышены ограничения размера/количества. Readiness не проверяет worker. |
-| Не приходит письмо | Настроены Brevo API key и подтверждённый отправитель; проверить Transactional Logs в Brevo и папку «Спам». Ответ формы не доказывает наличие аккаунта или доставку. |
-| Нет пункта «Суперадмин» | Аккаунт зарегистрирован в нужной БД, выполнен bootstrap именно для неё, затем выполнен новый вход. |
-| После смены native/Docker S3 пропали превью | Эти варианты используют разные данные; вернуть прежнее хранилище или отдельно перенести объекты. |
-| Сборка закончилась, но изменений на сайте нет | На Render выключен auto-deploy; выполнить Manual Deploy последнего коммита. |
+| `Missing DATABASE_URL` on Render | Add the value under Environment, not as an entry named `.env.demo`. Save the changes and deploy again. |
+| Schema error during `demo:start` | The URL must contain exactly one `schema=partyphoto` parameter. Local `schema=public` is for development. |
+| Origin, cookie, or HTTPS error | `APP_URL` must match the browser address and use HTTPS in production. On Render, remove any accidentally imported localhost origin. |
+| Prisma connection error | Check that the database is running and healthy, the host, port, username, and password are correct, special characters in the password are URL-encoded, and migrations have been applied. |
+| `Duplicate key` in Render Environment | Remove the duplicate entry, keeping one with the correct value. |
+| S3 error or failed readiness check | Check the endpoint, region, keys, bucket, and path-style setting. The private bucket must exist. Run `storage:check` for local S3. |
+| Photo rejected by the demo | Use a non-animated JPEG, PNG, or WebP image no larger than 3 MiB and 6 MP. Check the available quota and guest upload permission. |
+| ZIP remains queued | Check that the media worker is running, the Render service is awake, and size and photo-count limits have not been exceeded. Readiness does not check the worker. |
+| Password reset email does not arrive | Configure the Brevo API key and a verified sender. Check Brevo Transactional Logs and the spam folder. The form response does not prove that an account exists or that a message was delivered. |
+| Superadmin menu item is missing | Register the account in the intended database, run bootstrap against that database, then sign in again. |
+| Previews disappear after switching between native and Docker S3 | These setups use separate data stores. Switch back to the previous storage or migrate the objects separately. |
+| Build succeeded, but the website has not changed | Auto-deploy is disabled on Render. Manually deploy the latest commit. |
 
-Текущие границы реализации:
+Current implementation limits:
 
-- Глобальная роль `ADMIN` — суперадминистратор приложения, не root-доступ к серверу.
-- Назначение участников команды, перенос владельца и удаление самого мероприятия
-  через UI/API пока не реализованы, хотя часть полей/связей присутствует в схеме.
-- Лимиты редактируются для конкретного события; отдельного глобального редактора
-  тарифов, общей квоты пользователя или учёта свободного места провайдера нет.
-- В кабинете возвращаются до 100 доступных мероприятий; админские списки имеют пагинацию.
-- Истечение альбома не удаляет медиа, блокировка владельца не отзывает гостевой доступ.
-- В enum `JobKind` есть `THUMBNAIL`, `DELETE_MEDIA`, `EXPIRE_EVENT`, но фактическая
-  очередь `MediaJob` сейчас используется для ZIP; остальные операции выполняются
-  синхронно или отдельными проходами обслуживания worker.
-- Нет email-подтверждения регистрации и долговечной очереди писем. Для постоянного
-  публичного сервиса отдельно нужны эксплуатационная проверка, резервное копирование,
-  мониторинг и согласованные с реальными ресурсами лимиты.
+- The global `ADMIN` role grants superadmin access to the application, not root
+  access to the server.
+- Team member assignment, ownership transfer, and event deletion through the
+  UI/API are not implemented yet, although some related fields and relationships
+  exist in the schema.
+- Limits are configured per event. There is no separate global editor for plans,
+  per-user storage quotas, or tracking the provider's available storage.
+- The dashboard returns up to 100 accessible events; admin lists are paginated.
+- Album expiration does not delete media, and blocking an owner does not revoke
+  guest access to their albums.
+- `JobKind` includes `THUMBNAIL`, `DELETE_MEDIA`, and `EXPIRE_EVENT`, but the
+  `MediaJob` queue currently processes ZIP jobs only. Other operations run
+  synchronously or in separate worker maintenance passes.
+- Registration does not include email verification, and there is no durable
+  email queue. A continuously available public service also needs operational
+  validation, backups, monitoring, and limits matched to its actual resources.
 
 <a id="docs"></a>
-## Дополнительная документация
+## Further documentation
 
-- [docs/free-demo.md](docs/free-demo.md) — подробности бесплатного размещения и сценарий показа.
-- [docs/email.md](docs/email.md) — Brevo, доставка писем и тесты с mock-провайдером.
-- [docs/deployment.md](docs/deployment.md) — самостоятельный Docker/Nginx/TLS deployment.
-- [docs/architecture.md](docs/architecture.md) — проектные заметки об архитектуре.
-- [prisma/schema.prisma](prisma/schema.prisma) — актуальная полная схема данных.
-- [package.json](package.json), [render.yaml](render.yaml), [compose.yaml](compose.yaml) — исполняемые команды и конфигурация окружений.
+- [docs/free-demo.md](docs/free-demo.md) — free hosting details and a demonstration walkthrough.
+- [docs/email.md](docs/email.md) — Brevo setup, email delivery, and tests using a mock provider.
+- [docs/deployment.md](docs/deployment.md) — self-hosted Docker/Nginx/TLS deployment.
+- [docs/architecture.md](docs/architecture.md) — architectural design notes.
+- [prisma/schema.prisma](prisma/schema.prisma) — the complete, current data schema.
+- [package.json](package.json), [render.yaml](render.yaml), [compose.yaml](compose.yaml) — executable commands and environment configuration.
