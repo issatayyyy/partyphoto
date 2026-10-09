@@ -47,6 +47,7 @@ model User {
   ownedEvents  Event[]
   memberships  EventMember[]
   sessions     Session[]
+  passwordReset PasswordResetToken?
   photos       Photo[]
 }
 model Event {
@@ -152,6 +153,15 @@ model AccessToken {
   expiresAt     DateTime
   createdAt     DateTime @default(now())
   @@index([eventId])
+  @@index([expiresAt])
+}
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  tokenHash String   @unique
+  expiresAt DateTime @db.Timestamptz(3)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([expiresAt])
 }
 model MediaJob {

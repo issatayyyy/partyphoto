@@ -18,6 +18,7 @@ export async function POST(request: Request) {
     const session = newSession();
     const previousToken = (await cookies()).get(SESSION_COOKIE)?.value;
     const user = await db.$transaction(async tx => {
+      await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${credential.id} FOR UPDATE`;
       const user = await tx.user.findFirst({ where: { id: credential.id, disabledAt: null, passwordHash: credential.passwordHash }, select: userFields });
       if (!user) throw new AuthError(401, "Неверный email или пароль.");
       await insertSession(tx, user.id, session, previousToken);
