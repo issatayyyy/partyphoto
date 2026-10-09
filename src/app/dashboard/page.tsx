@@ -25,6 +25,7 @@ export default async function DashboardPage() {
       <header>
         <Link className="brand" href="/">partyphoto<span>●</span></Link>
         <nav className="header-nav" aria-label="Навигация">
+          {user.role === "ADMIN" && <Link className="header-link admin-nav-link" href="/admin">Суперадмин</Link>}
           <Link className="header-link" href="/">На главную</Link>
           <LogoutButton />
         </nav>
