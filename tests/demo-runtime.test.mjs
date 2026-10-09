@@ -157,6 +157,65 @@ test("successful migrations precede fixed web and worker commands and env", asyn
   assert.equal(runtime.signals.listenerCount("SIGINT"), 0);
 });
 
+test("only complete exact website mail statuses are relayed across chunks and CRLF", async t => {
+  const rootDir = await fixture(t);
+  const runtime = fakeRuntime(rootDir);
+  const statuses = [
+    "Password reset email: accepted",
+    "Password reset email: failed (unauthorized)",
+    "Password reset email: failed (sender_rejected)",
+    "Password reset email: failed (rate_limited)",
+    "Password reset email: failed (unavailable)",
+    "Password reset email: failed (internal)",
+  ];
+  const relayed = () => runtime.messages.filter(message => message.startsWith("Password reset email:"));
+  runtime.children[0].stdout.write(`${statuses[0]}\n`);
+  runtime.children[0].stderr.write(`${statuses[1]}\n`);
+  runtime.children[0].finish(0);
+  const web = runtime.children[1];
+  const worker = runtime.children[2];
+  worker.stdout.write(`${statuses[0]}\n`);
+  worker.stderr.write(`${statuses[1]}\n`);
+  web.stdout.write(Buffer.from("Password reset email: ac"));
+  web.stdout.write(Buffer.from("cepted"));
+  assert.deepEqual(relayed(), []);
+  web.stdout.write("\n");
+  assert.deepEqual(relayed(), [statuses[0]]);
+  web.stderr.write("Password reset email: failed (unauthor");
+  web.stderr.write("ized)\r");
+  assert.deepEqual(relayed(), [statuses[0]]);
+  web.stderr.write(`\n${statuses[2]}\n${statuses[3]}\r\n`);
+  web.stdout.write(`${statuses[4]}\n${statuses[5]}\n`);
+  assert.deepEqual(relayed(), statuses);
+  web.stdout.write(statuses[0]);
+  runtime.signals.emit("SIGTERM");
+  assert.equal(await runtime.run, 0);
+  assert.deepEqual(relayed(), statuses);
+});
+
+test("mail log relay drops arbitrary diagnostics and entire oversized lines without leaking tails", async t => {
+  const rootDir = await fixture(t);
+  const runtime = fakeRuntime(rootDir);
+  runtime.children[0].finish(0);
+  const web = runtime.children[1];
+  const accepted = "Password reset email: accepted";
+  const internal = "Password reset email: failed (internal)";
+  const secret = "user@example.invalid reset-token-fixture-secret api-key-fixture-secret https://example.invalid/reset-password?token=fixture";
+  web.stdout.write(`${secret}\n${secret} ${accepted}\n${accepted} ${secret}\n`);
+  web.stdout.write(` ${accepted}\n${accepted} \n${accepted}\rgarbage\n`);
+  web.stdout.write("x".repeat(4096));
+  web.stdout.write(`${accepted}\n`);
+  web.stderr.write("x".repeat(4096));
+  web.stderr.write(`${internal.slice(0, 20)}`);
+  web.stderr.write(`${internal.slice(20)}\r\n`);
+  web.stdout.write(`ignored\n${accepted}\n`);
+  web.stderr.write(`${internal}\r\n`);
+  assert.deepEqual(runtime.messages.filter(message => message.startsWith("Password reset email:")), [accepted, internal]);
+  assert.doesNotMatch(runtime.messages.join("\n"), /example\.invalid|fixture-secret|reset-password|garbage|x{100}/);
+  runtime.signals.emit("SIGTERM");
+  assert.equal(await runtime.run, 0);
+});
+
 test("migration failure closes startup and never launches web or worker", async t => {
   const rootDir = await fixture(t);
   const runtime = fakeRuntime(rootDir);

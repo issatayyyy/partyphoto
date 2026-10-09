@@ -152,6 +152,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           {error && <p className="form-error" id={errorId} role="alert">{error}</p>}
         </div>
       </form>
+      {!isRegister && <p className="auth-switch"><Link href="/forgot-password">Забыли пароль?</Link></p>}
       <p className="auth-switch">
         {isRegister ? "Уже есть аккаунт? " : "Впервые здесь? "}
         <Link href={isRegister ? "/login" : "/register"}>{isRegister ? "Войти" : "Создать аккаунт"}</Link>

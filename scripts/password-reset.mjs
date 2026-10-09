@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 
-// An operator issues links only after independently verifying account ownership.
+// Operators issue links after independently verifying account ownership; the
+// self-service flow delivers links only to the active account's stored email.
 // Issuance does not change the password, role, or existing sessions.
 export async function issuePasswordReset(db, email) {
   const normalized = typeof email === "string" ? email.trim().toLowerCase() : "";

@@ -18,6 +18,8 @@
     "test:engagement": "node --env-file=.env --test tests/engagement.integration.test.mjs",
     "test:views": "node --env-file=.env --test tests/views.integration.test.mjs",
     "test:password-reset": "node --env-file=.env --test tests/password-reset.integration.test.mjs",
+    "test:email": "node --experimental-strip-types --conditions=react-server --test tests/reset-email.test.mjs",
+    "test:forgot-password": "node --env-file=.env --test tests/forgot-password.integration.test.mjs",
     "test:admin": "node --env-file=.env --test tests/admin.integration.test.mjs",
     "admin:reset-password": "node --env-file=.env scripts/reset-password.mjs",
     "admin:bootstrap": "node --env-file=.env scripts/admin-bootstrap.mjs",

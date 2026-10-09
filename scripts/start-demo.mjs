@@ -4,6 +4,46 @@ import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const projectRoot = fileURLToPath(new URL("../", import.meta.url));
+const mailLogLines = new Set([
+  "Password reset email: accepted",
+  "Password reset email: failed (unauthorized)",
+  "Password reset email: failed (sender_rejected)",
+  "Password reset email: failed (rate_limited)",
+  "Password reset email: failed (unavailable)",
+  "Password reset email: failed (internal)",
+]);
+const maxLogLineLength = 256;
+
+function relayMailStatus(stream, logger) {
+  if (!stream) return;
+  let pending = "";
+  let discarding = false;
+  stream.setEncoding("utf8");
+  stream.on("data", chunk => {
+    let start = 0;
+    while (start < chunk.length) {
+      const newline = chunk.indexOf("\n", start);
+      const end = newline === -1 ? chunk.length : newline;
+      if (!discarding) {
+        if (pending.length + end - start > maxLogLineLength) {
+          pending = "";
+          discarding = true;
+        } else pending += chunk.slice(start, end);
+      }
+      if (newline === -1) break;
+      if (!discarding) {
+        const line = pending.endsWith("\r") ? pending.slice(0, -1) : pending;
+        if (mailLogLines.has(line)) logger(line);
+      }
+      pending = "";
+      discarding = false;
+      start = newline + 1;
+    }
+  });
+  // A partial line at EOF is never a complete allowed status.
+  stream.on("end", () => { pending = ""; });
+  stream.resume();
+}
 
 class DemoConfigurationError extends Error {}
 
@@ -137,9 +177,14 @@ export async function startDemo({
       const record = { child, name, active: true };
       children.add(record);
       // Do not relay arbitrary library diagnostics or database connection strings.
-      // Fixed lifecycle messages below are sufficient for the course demo.
-      child.stdout?.resume();
-      child.stderr?.resume();
+      // Only complete, fixed mail-status lines from the website may pass through.
+      if (name === "website") {
+        relayMailStatus(child.stdout, logger);
+        relayMailStatus(child.stderr, logger);
+      } else {
+        child.stdout?.resume();
+        child.stderr?.resume();
+      }
       child.once("error", () => {
         if (!record.active || finished) return;
         record.active = false;
