@@ -3,6 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { S3Client } from "@aws-sdk/client-s3";
 import { recoverMedia } from "./media-recovery.mjs";
 import { processZipJob } from "./zip-worker.mjs";
+import { pruneAlbumViews, pruneViewRateLimits } from "./view-cleanup.mjs";
 
 const required = name => {
   const value = process.env[name];
@@ -31,6 +32,9 @@ try {
       if (zip.processed || zip.expired || once) console.log(`ZIP: processed=${zip.processed}, status=${zip.status ?? "idle"}, expired=${zip.expired}`);
       if (once && zip.status === "FAILED") process.exitCode = 1;
       if (once || Date.now() - lastCleanup >= 30000) {
+        const views = await pruneAlbumViews(db);
+        const viewLimits = await pruneViewRateLimits(db);
+        if (views || viewLimits || once) console.log(`View cleanup: removed=${views}, expired limits=${viewLimits}`);
         const { removed, failed } = await recoverMedia(db, s3, bucket);
         lastCleanup = Date.now();
         if (removed || failed || once) console.log(`Media cleanup: removed=${removed}, retry=${failed}`);

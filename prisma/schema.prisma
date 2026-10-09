@@ -79,6 +79,7 @@ model Event {
   members             EventMember[]
   photos              Photo[]
   accessTokens        AccessToken[]
+  albumViews          AlbumView[]
   jobs                MediaJob[]
   @@index([ownerId, createdAt])
   @@index([expiresAt])
@@ -122,6 +123,15 @@ model PhotoLike {
   photo     Photo    @relation(fields: [photoId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   @@id([photoId, voterHash])
+}
+// Only retained for the rolling deduplication window; Event.viewCount is cumulative.
+model AlbumView {
+  eventId       String
+  visitorHash   String
+  lastCountedAt DateTime @default(now()) @db.Timestamptz(3)
+  event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  @@id([eventId, visitorHash])
+  @@index([lastCountedAt])
 }
 model Session {
   id        String   @id @default(cuid())

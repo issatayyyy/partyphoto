@@ -54,11 +54,16 @@ export function PhotoGallery({ eventId, slug, allowUploads = true, allowDownload
     fetchPhotos(null, controller.signal).then((result) => {
       if (controller.signal.aborted) return;
       setPhotos(result.photos); setNextCursor(result.nextCursor);
+      if (!staff && slug) {
+        void fetch(`/api/albums/${slug}/view`, {
+          method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: "{}", signal: controller.signal,
+        }).then(response => response.arrayBuffer()).catch(() => {});
+      }
     }).catch((loadError: unknown) => {
       if (!controller.signal.aborted) setError(loadError instanceof Error ? loadError.message : "Не удалось загрузить фотографии.");
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => { controller.abort(); moreController.current?.abort(); };
-  }, [fetchPhotos, reloadKey]);
+  }, [fetchPhotos, reloadKey, staff, slug]);
 
   useEffect(() => {
     if (preview) previewDialog.current?.showModal();
