@@ -394,6 +394,14 @@ Full schema: [prisma/schema.prisma](prisma/schema.prisma).
 An album link is `/e/<slug>` on the application's domain. The current code does not
 implement separate subdomains for individual albums or wildcard DNS.
 
+Shared event links use a compact guest interface with square photo cards,
+overlaid likes/downloads, and **Newest / Most liked** sorting. The site's Home
+and Dashboard navigation is hidden throughout `/e/[slug]`, including the
+password screen. When guest uploads are enabled, the album's bottom bar provides
+**Gallery**, **Camera**, and **Add photos**. Selecting files reveals the upload
+form; albums with uploads disabled have no camera or upload controls. Both light
+and dark themes retain the application's olive palette.
+
 ### Main APIs
 
 | Method and path | Purpose |
@@ -419,6 +427,12 @@ implement separate subdomains for individual albums or wildcard DNS.
 | `GET /api/admin/overview`, `/api/admin/users`, `/api/admin/events` | Statistics and lists for the superadmin. |
 | `PATCH /api/admin/users/[id]` | Change a global role, block / unblock an account. |
 | `GET /api/health`, `/api/health/ready` | Liveness and readiness. |
+
+Both photo-list GET endpoints accept `sort=newest` (the default) or `sort=likes`,
+plus an optional `cursor`. They return `{ photos, nextCursor, totalCount }`.
+Sorting and counts cover the entire accessible album, with hidden/unpublished
+photos excluded for guests. Equal like counts are ordered by creation date and
+ID. Changing the sort discards the previous page request and restarts pagination.
 
 <a id="auth"></a>
 ## Authentication and permissions
@@ -806,6 +820,15 @@ webcam. With the local dev server, PostgreSQL, and S3 running:
 
 ```bash
 npm run test:ui -- tests/camera.browser.spec.ts tests/media.browser.spec.ts
+```
+
+Guest-gallery checks cover navigation, password/view-only albums, card layout in
+both themes, sorting, and stale pagination responses. The API integration checks
+also verify sorting across multiple pages and access restrictions:
+
+```bash
+node --env-file=.env --test tests/gallery-sort.integration.test.mjs
+npm run test:ui -- tests/guest-gallery.browser.spec.ts
 ```
 
 The production demo runtime test uses a separate, randomly named

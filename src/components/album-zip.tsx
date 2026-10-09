@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import type { ZipDTO } from "@/lib/zip-types";
 
-export function AlbumZip({ endpoint }: { endpoint: string }) {
+export function AlbumZip({ endpoint, compact = false }: { endpoint: string; compact?: boolean }) {
   const [job, setJob] = useState<ZipDTO | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [requesting, setRequesting] = useState(false);
@@ -121,8 +121,8 @@ export function AlbumZip({ endpoint }: { endpoint: string }) {
   }
 
   return (
-    <section className="album-zip" aria-label="Скачать фотографии архивом" aria-busy={requesting || active || checkingDownload}>
-      <div className="album-zip-heading"><div><h3>Все моменты — одним архивом</h3><p>Скачайте опубликованные фотографии в оригинальном качестве.</p></div>{ready && job?.downloadUrl ? <a className="button button-primary" href={job.downloadUrl} download="partyphoto-album.zip" onClick={downloadArchive} aria-disabled={checkingDownload}>{checkingDownload ? "Проверяем архив…" : "Скачать готовый ZIP"} <span aria-hidden="true">↓</span></a> : <button className="button button-outline" type="button" onClick={requestArchive} disabled={initializing || requesting || active || checkingDownload}>{requesting || active ? "Готовим ZIP…" : "Скачать всё ZIP"}<span aria-hidden="true">↓</span></button>}</div>
+    <section className={`album-zip${compact ? " album-zip-compact" : ""}`} aria-label="Скачать фотографии архивом" aria-busy={requesting || active || checkingDownload}>
+      <div className="album-zip-heading">{!compact && <div><h3>Все моменты — одним архивом</h3><p>Скачайте опубликованные фотографии в оригинальном качестве.</p></div>}{ready && job?.downloadUrl ? <a className="button button-primary" href={job.downloadUrl} download="partyphoto-album.zip" onClick={downloadArchive} aria-disabled={checkingDownload}>{checkingDownload ? "Проверяем архив…" : "Скачать готовый ZIP"} <span aria-hidden="true">↓</span></a> : <button className="button button-outline" type="button" onClick={requestArchive} disabled={initializing || requesting || active || checkingDownload}>{requesting || active ? "Готовим ZIP…" : "Скачать всё ZIP"}<span aria-hidden="true">↓</span></button>}</div>
       {active && job && <div className="zip-progress"><progress max={Math.max(job.totalPhotos, 1)} value={job.totalPhotos ? Math.min(job.processedPhotos, job.totalPhotos) : undefined} aria-label="Подготовка ZIP-архива" /><p role="status" aria-live="polite">{job.status === "QUEUED" ? "Архив ожидает обработки." : "Собираем архив."}{job.totalPhotos > 0 ? ` Готово ${job.processedPhotos} из ${job.totalPhotos} фотографий.` : ""} Можно оставить эту страницу открытой — ссылка появится автоматически.</p></div>}
       {ready && <p className="zip-ready" role="status">Архив готов.{job?.expiresAt ? <> Ссылка доступна до <time dateTime={job.expiresAt}>{new Date(job.expiresAt).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })}</time>.</> : " Можно скачать фотографии по ссылке."}</p>}
       {job?.status === "FAILED" && !error && <p className="form-error" role="alert">{job.error || "Не удалось собрать архив. Нажмите «Скачать всё ZIP», чтобы попробовать ещё раз."}</p>}

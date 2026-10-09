@@ -71,7 +71,8 @@ export function photoDTO(photo: Photo, access: PhotoAccess, likes = { likeCount:
   };
 }
 
-export async function listPhotos(access: PhotoAccess, cursor?: string) {
+export async function listPhotos(access: PhotoAccess, cursor?: string, sort = "newest") {
+  if (sort !== "newest" && sort !== "likes") throw new AuthError(400, "Некорректная сортировка фотографий.");
   if (cursor && !/^[a-zA-Z0-9-]{1,100}$/.test(cursor)) throw new AuthError(400, "Некорректная страница фотографий.");
   const voter = await voterHash(access);
   return db.$transaction(async tx => {
@@ -82,13 +83,23 @@ export async function listPhotos(access: PhotoAccess, cursor?: string) {
     if (cursor) {
       const anchor = await tx.photo.findFirst({ where: { ...where, id: cursor } });
       if (!anchor) throw new AuthError(400, "Обновите галерею: страница больше недоступна.");
-      continuation = { OR: [{ createdAt: { lt: anchor.createdAt } }, { createdAt: anchor.createdAt, id: { lt: anchor.id } }] };
+      if (sort === "newest") {
+        continuation = { OR: [{ createdAt: { lt: anchor.createdAt } }, { createdAt: anchor.createdAt, id: { lt: anchor.id } }] };
+      }
     }
-    const photos = await tx.photo.findMany({ where: { ...where, ...continuation }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 41,
+    // Rank the whole accessible album, including photos beyond the first page.
+    // createdAt/id give equal-like photos a deterministic order and cursor boundary.
+    const orderBy: Prisma.PhotoOrderByWithRelationInput[] = [
+      ...(sort === "likes" ? [{ likes: { _count: "desc" as const } }] : []),
+      { createdAt: "desc" }, { id: "desc" },
+    ];
+    const totalCount = await tx.photo.count({ where });
+    const photos = await tx.photo.findMany({ where: { ...where, ...continuation }, orderBy, take: 41,
+      ...(sort === "likes" && cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       include: { _count: { select: { likes: true } }, likes: { where: { voterHash: voter ?? "" }, select: { photoId: true } } },
     });
     const page = photos.slice(0, 40);
-    return { photos: page.map(photo => photoDTO(photo, { ...access, event }, { likeCount: photo._count.likes, liked: photo.likes.length > 0 })), nextCursor: photos.length > 40 ? page[page.length - 1].id : null };
+    return { photos: page.map(photo => photoDTO(photo, { ...access, event }, { likeCount: photo._count.likes, liked: photo.likes.length > 0 })), nextCursor: photos.length > 40 ? page[page.length - 1].id : null, totalCount };
   });
 }
 

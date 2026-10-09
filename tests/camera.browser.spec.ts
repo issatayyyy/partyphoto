@@ -33,9 +33,11 @@ const test = base.extend<{ album: AlbumFixture }>({
         sessions: { create: { tokenHash: createHash("sha256").update(session).digest("hex"), expiresAt: new Date(Date.now() + 3600000) } },
       } });
       userId = user.id;
+      const codeAlphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+      const code = Array.from(randomBytes(8), byte => codeAlphabet[byte % codeAlphabet.length]).join("");
       const event = await db.event.create({ data: {
         ownerId: user.id, title: "Моменты с камеры", slug,
-        code: randomBytes(4).toString("hex").toUpperCase(), allowGuestUploads: true,
+        code, allowGuestUploads: true,
       } });
       eventId = event.id;
       await use({ db, eventId, slug, userId, session });
@@ -217,7 +219,11 @@ test("denied camera access leaves a working device-file upload fallback", async 
 
 test("late camera permission, backgrounding and route unmount never leave a live stream", async ({ page, album }) => {
   await observeCamera(page);
-  await page.goto(`/e/${album.slug}`);
+  const event = await album.db.event.findUniqueOrThrow({ where: { id: album.eventId }, select: { code: true } });
+  await page.goto("/join");
+  await page.getByLabel("Код мероприятия", { exact: true }).fill(event.code);
+  await page.getByRole("button", { name: "Открыть альбом", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/e/${album.slug}$`));
   await page.evaluate(() => {
     const state = window as typeof window & { cameraTestRelease: () => void };
     const getUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
@@ -271,10 +277,10 @@ test("late camera permission, backgrounding and route unmount never leave a live
   await expect.poll(async () => (await cameraState(page)).live).toBeGreaterThan(0);
   const beforeNavigation = (await cameraState(page)).requested;
 
-  // Trigger the existing Next link to exercise React unmount rather than a
-  // full document unload, which would let the browser release tracks for us.
-  await page.locator("header .brand").evaluate(element => (element as HTMLAnchorElement).click());
-  await expect(page).toHaveURL(/\/$/);
+  // Restore the previous App Router entry to exercise React unmount rather
+  // than a full document unload that would release tracks for us.
+  await page.goBack();
+  await expect(page).toHaveURL(/\/join$/);
   await expect(camera).not.toBeVisible();
   await expect.poll(async () => (await cameraState(page)).live).toBe(0);
   expect((await cameraState(page)).requested).toBe(beforeNavigation);

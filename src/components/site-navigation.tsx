@@ -6,6 +6,8 @@ import { UiIcon } from "./ui-icon";
 
 export function SiteNavigation() {
   const pathname = usePathname();
+  // An event link has its own guest navigation, scoped to that album.
+  if (pathname.startsWith("/e/")) return null;
   const sections = [
     { href: "/", label: "Главная", icon: "home" as const, active: pathname === "/" },
     { href: "/join", label: "Альбом", icon: "album" as const, active: pathname === "/join" || pathname.startsWith("/e/") },

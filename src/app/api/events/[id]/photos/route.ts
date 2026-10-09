@@ -3,7 +3,10 @@ import { staffPhotoAccess, listPhotos, uploadPhoto } from "@/lib/photos";
 import { ensureVisitor } from "@/lib/visitor";
 export const runtime = "nodejs";
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  try { return await ensureVisitor(authResponse(await listPhotos(await staffPhotoAccess((await params).id), new URL(request.url).searchParams.get("cursor") ?? undefined))); }
+  try {
+    const query = new URL(request.url).searchParams;
+    return await ensureVisitor(authResponse(await listPhotos(await staffPhotoAccess((await params).id), query.get("cursor") ?? undefined, query.get("sort") ?? undefined)));
+  }
   catch (error) { return authFailure(error); }
 }
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
