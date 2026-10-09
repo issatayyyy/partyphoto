@@ -6,6 +6,7 @@ import { newSession, tokenHash } from "./auth";
 import { AuthError, appOrigin } from "./auth-http";
 import { consumeRateLimit } from "./auth-rate-limit";
 import { verifyPassword } from "./password";
+import { effectiveUploadBytes } from "./runtime-limits";
 import type { GuestEventDTO } from "./event-types";
 import type { NextResponse } from "next/server";
 
@@ -28,7 +29,7 @@ export async function getGuestAlbum(slug: string): Promise<{ title: string; slug
     id: event.id, title: event.title, slug: event.slug, description: event.description,
     startsAt: event.startsAt?.toISOString() ?? null, expiresAt: event.expiresAt?.toISOString() ?? null,
     allowDownloads: event.allowDownloads, allowGuestUploads: event.allowGuestUploads, photoCount: event._count.photos,
-    maxUploadMb: event.maxUploadBytes / 1048576,
+    maxUploadMb: effectiveUploadBytes(event.maxUploadBytes) / 1048576,
   } : null };
 }
 

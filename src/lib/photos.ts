@@ -13,6 +13,12 @@ import { visibleEvents } from "./events";
 import { deleteMedia, getMedia, putMedia } from "./storage";
 import type { PhotoDTO } from "./photo-types";
 import { voterHash } from "./visitor";
+import { effectiveUploadBytes, imagePixelLimit, isDemoMode, uploadConcurrencyLimit } from "./runtime-limits";
+
+if (isDemoMode()) {
+  sharp.cache(false);
+  sharp.concurrency(1);
+}
 
 type Actor = { kind: "staff"; userId: string; sessionHash: string } | { kind: "guest"; grantHash?: string; accessVersion: number };
 export type PhotoAccess = { event: Event; actor: Actor };
@@ -139,32 +145,32 @@ async function cleanupObjects(photo: Photo) {
 
 export async function uploadPhoto(request: Request, access: PhotoAccess) {
   assertAuthOrigin(request);
-  if (activeUploads >= 2) throw new AuthError(429, "Идёт обработка фотографий. Повторите загрузку немного позже.", 5);
+  if (activeUploads >= uploadConcurrencyLimit()) throw new AuthError(429, "Идёт обработка фотографий. Повторите загрузку немного позже.", 5);
   activeUploads++;
   let reserved: Photo | undefined;
   try {
     await db.$transaction(tx => authorize(tx, access.event, access.actor, true));
     await consumeRateLimit(`media:upload:${access.actor.kind === "staff" ? access.actor.userId : access.event.id}`, 120, 900);
-    const configuredMax = Number(process.env.MAX_UPLOAD_BYTES ?? 26214400);
-    if (!Number.isSafeInteger(configuredMax) || configuredMax < 1) throw new Error("Invalid MAX_UPLOAD_BYTES");
-    const { file, buffer } = await readUpload(request, Math.min(configuredMax, access.event.maxUploadBytes));
+    const { file, buffer } = await readUpload(request, effectiveUploadBytes(access.event.maxUploadBytes));
+    const maxPixels = imagePixelLimit();
     let thumbnail: Buffer;
     let width: number;
     let height: number;
     let format: string;
     try {
-      const metadata = await sharp(buffer, { limitInputPixels: 40000000, failOn: "warning" }).metadata();
+      const metadata = await sharp(buffer, { limitInputPixels: maxPixels, failOn: "warning" }).metadata();
       if (!metadata.width || !metadata.height || (metadata.pages ?? 1) > 1) throw new AuthError(400, "Выберите обычную фотографию без анимации.");
+      if (metadata.width * metadata.height > maxPixels) throw new Error("Image pixel limit exceeded");
       format = metadata.format ?? "";
       if (!["jpeg", "png", "webp"].includes(format)) throw new AuthError(415, "Поддерживаются JPEG, PNG и WebP.");
       const actualMime = format === "jpeg" ? "image/jpeg" : `image/${format}`;
       if (actualMime !== file.type) throw new AuthError(415, "Тип файла не соответствует содержимому.");
       width = metadata.orientation && metadata.orientation >= 5 ? metadata.height : metadata.width;
       height = metadata.orientation && metadata.orientation >= 5 ? metadata.width : metadata.height;
-      thumbnail = await sharp(buffer, { limitInputPixels: 40000000, failOn: "warning" }).rotate().resize({ width: 1200, height: 1200, fit: "inside", withoutEnlargement: true }).webp({ quality: 80 }).toBuffer();
+      thumbnail = await sharp(buffer, { limitInputPixels: maxPixels, failOn: "warning" }).rotate().resize({ width: 1200, height: 1200, fit: "inside", withoutEnlargement: true }).webp({ quality: 80 }).toBuffer();
     } catch (error) {
       if (error instanceof AuthError) throw error;
-      throw new AuthError(400, "Не удалось прочитать фотографию. Максимум — 40 мегапикселей.");
+      throw new AuthError(400, `Не удалось прочитать фотографию. Максимум — ${maxPixels / 1000000} мегапикселей.`);
     }
     const id = randomUUID();
     const totalBytes = BigInt(buffer.byteLength + thumbnail.byteLength);
@@ -173,7 +179,7 @@ export async function uploadPhoto(request: Request, access: PhotoAccess) {
       await tx.$queryRaw`SELECT "id" FROM "Event" WHERE "id" = ${access.event.id} FOR UPDATE`;
       const event = await tx.event.findUniqueOrThrow({ where: { id: access.event.id } });
       await authorize(tx, event, access.actor, true);
-      if (buffer.byteLength > event.maxUploadBytes) throw new AuthError(413, "Лимит файла изменился. Выберите меньшую фотографию.");
+      if (buffer.byteLength > effectiveUploadBytes(event.maxUploadBytes)) throw new AuthError(413, "Лимит файла изменился. Выберите меньшую фотографию.");
       if (await tx.photo.count({ where: { eventId: event.id } }) >= event.maxPhotos || event.usedStorageBytes + event.reservedBytes + totalBytes > event.maxStorageBytes) throw new AuthError(409, "Лимит альбома исчерпан. Обратитесь к организатору.");
       await tx.event.update({ where: { id: event.id }, data: { reservedBytes: { increment: totalBytes } } });
       return tx.photo.create({ data: { id, eventId: event.id, uploaderId: access.actor.kind === "staff" ? access.actor.userId : null,

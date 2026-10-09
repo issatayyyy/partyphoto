@@ -1,0 +1,41 @@
+# Course demo: one free web service; Supabase Free holds the database and files.
+# No Render database, paid background worker, disk, or paid custom domain.
+services:
+  - type: web
+    name: partyphoto-demo
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: main
+    autoDeployTrigger: "off"
+    buildCommand: npm ci --include=dev && npm run build && npm run demo:prepare
+    startCommand: npm run demo:start
+    healthCheckPath: /api/health/ready
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: PARTYPHOTO_DEMO_MODE
+        value: "true"
+      - key: MAX_UPLOAD_BYTES
+        value: "3145728"
+      - key: MAX_ZIP_BYTES
+        value: "41943040"
+      - key: MAX_ZIP_PHOTOS
+        value: "100"
+      - key: S3_FORCE_PATH_STYLE
+        value: "true"
+      - key: S3_BUCKET
+        value: partyphoto
+      - key: DATABASE_URL
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false

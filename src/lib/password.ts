@@ -1,11 +1,12 @@
 import "server-only";
 import * as argon2 from "argon2";
 import { AuthError } from "./auth-http";
+import { passwordConcurrencyLimit } from "./runtime-limits";
 
 let active = 0;
 // Bound Argon2 memory use per app process instead of building an unbounded queue.
 async function withPasswordSlot<T>(operation: () => Promise<T>): Promise<T> {
-  if (active >= 4) throw new AuthError(429, "Слишком много попыток. Подождите немного.", 5);
+  if (active >= passwordConcurrencyLimit()) throw new AuthError(429, "Слишком много попыток. Подождите немного.", 5);
   active++;
   try { return await operation(); } finally { active--; }
 }
